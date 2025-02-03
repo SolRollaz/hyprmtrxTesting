@@ -1,0 +1,6 @@
+.env
+node_modules
+out
+build
+QR_Codes
+.vscode

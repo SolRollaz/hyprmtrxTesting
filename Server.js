@@ -106,16 +106,21 @@ app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send
 
 // 🔥 FIX WEBSOCKET UPGRADE (NO MORE 404s)
 server.on('upgrade', (request, socket, head) => {
+    console.log(`🔄 WebSocket Upgrade Attempt for: ${request.url}`);
+
     if (request.url === "/api/auth") {
-        console.log("🔄 WebSocket upgrade request received on /api/auth");
+        console.log("✅ WebSocket upgrade accepted!");
+
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit("connection", ws, request);
         });
     } else {
         console.log(`🚨 Invalid WebSocket request: ${request.url}`);
+        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
         socket.destroy();
     }
 });
+
 
 // 🔥 WebSocket Connection Tracking
 const connections = new Map();

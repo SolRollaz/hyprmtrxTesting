@@ -124,32 +124,46 @@ app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send
 // 🔥 WebSocket Connection Handling
 const connections = new Map();
 
-wss.on('connection', async (ws, req) => {
-    console.log(`✅ WebSocket connected from ${req.socket.remoteAddress}`);
+wss.on("connection", (ws) => {
+    console.log("✅ WebSocket connected.");
 
-    ws.on('message', async (message) => {
+    ws.on("message", async (message) => {
         try {
-            const data = JSON.parse(message);
-            console.log("📩 Received WebSocket Message:", data);
+            console.log("📩 Received WebSocket Message:", message);
+            const { action } = JSON.parse(message);
 
-            if (data.action === "authenticateUser") {
+            if (action === "authenticateUser") {
                 console.log("⚡ Generating QR Code...");
 
-                const qrCodeResult = await qrCodeAuth.generateAuthenticationQRCode();
+                // ✅ Add this try-catch block to catch errors
+                try {
+                    const qrCodeResult = await generateQRCode(); // Replace with actual function
 
-                if (qrCodeResult.status === "success") {
-                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qr_code_path }));
-                } else {
-                    ws.send(JSON.stringify({ error: "QR Code generation failed" }));
+                    if (qrCodeResult.status !== "success") {
+                        console.error("❌ QR Code generation failed:", qrCodeResult.message);
+                        ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
+                        return;
+                    }
+
+                    console.log("✅ Sending QR Code:", qrCodeResult.qrCodeUrl);
+                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
+                } catch (error) {
+                    console.error("❌ Error generating QR Code:", error);
+                    ws.send(JSON.stringify({ error: "QR Code generation error" }));
                 }
             }
-        } catch (err) {
-            console.error("❌ WebSocket Message Error:", err);
+        } catch (error) {
+            console.error("❌ Error processing WebSocket message:", error);
+            ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
         }
     });
 
-    ws.on('close', () => {
-        console.log(`❌ WebSocket closed from ${req.socket.remoteAddress}`);
+    ws.on("close", () => {
+        console.log("❌ WebSocket connection closed.");
+    });
+
+    ws.on("error", (error) => {
+        console.error("⚠️ WebSocket Error:", error);
     });
 });
 

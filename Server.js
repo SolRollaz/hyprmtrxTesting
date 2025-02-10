@@ -108,22 +108,17 @@ app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send
 // 🔥 WebSocket Connection Handling
 const connections = new Map();
 
+// 🛠 FIX: Ensure Express doesn't intercept WebSocket requests
 server.on('upgrade', (request, socket, head) => {
-    console.log(`🔄 WebSocket Upgrade Attempt for: ${request.url}`);
-
-    if (request.url.startsWith("/api/auth")) { 
-        console.log("✅ WebSocket upgrade accepted!");
-
+    if (request.url === "/api/auth") {
         wss.handleUpgrade(request, socket, head, (ws) => {
-            console.log("🔥 WebSocket successfully upgraded!");
             wss.emit("connection", ws, request);
         });
     } else {
-        console.log(`🚨 Invalid WebSocket request: ${request.url}`);
-        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
         socket.destroy();
     }
 });
+
 
 wss.on('connection', (ws, req) => {
     const ip = requestIp.getClientIp(req) || req.socket.remoteAddress;

@@ -19,9 +19,9 @@ import requestIp from 'request-ip'; // Get client IP for WebSocket tracking
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000; // ✅ Ensure port 4000 is used
 const server = http.createServer(app); // Create HTTP server for WebSockets
-const wss = new WebSocketServer({ server, path: "/api/auth" }); // Ensure WebSocket listens on correct path
+const wss = new WebSocketServer({ noServer: true }); // ✅ Handle WebSocket upgrade manually
 
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
@@ -41,6 +41,7 @@ app.use(
     })
 );
 
+// 🔥 Connect to MongoDB
 async function connectToMongoDB() {
     try {
         const client = new MongoClient(mongoUri, {
@@ -48,28 +49,24 @@ async function connectToMongoDB() {
             useUnifiedTopology: true,
         });
         await client.connect();
-        console.log('Connected to MongoDB');
+        console.log('✅ Connected to MongoDB');
         db = client.db(dbName);
     } catch (error) {
-        console.error('Failed to connect to MongoDB:', error);
+        console.error('❌ Failed to connect to MongoDB:', error);
         process.exit(1);
     }
 }
 
-app.get('/', (req, res) => {
-    res.status(200).send('API is running successfully.');
-});
-
+// API Routes
+app.get('/', (req, res) => res.status(200).send('API is running successfully.'));
 app.get('/users', async (req, res) => {
     try {
-        if (!db) {
-            return res.status(500).json({ error: 'Database connection not established.' });
-        }
+        if (!db) return res.status(500).json({ error: 'Database connection not established.' });
         const usersCollection = db.collection('users');
         const users = await usersCollection.find({}).toArray();
         res.json(users);
     } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('❌ Error fetching users:', error);
         res.status(500).json({ error: 'Failed to fetch users.' });
     }
 });
@@ -82,13 +79,10 @@ app.get('/nonce', (req, res) => {
 app.post('/verify', async (req, res) => {
     try {
         const { message, signature } = req.body;
-        if (!message || !signature) {
-            return res.status(400).json({ error: 'Message or signature is missing.' });
-        }
+        if (!message || !signature) return res.status(400).json({ error: 'Message or signature is missing.' });
 
         const address = getAddressFromMessage(message);
         const chainId = getChainIdFromMessage(message);
-
         const isValid = await verifySignature({
             address,
             message,
@@ -97,38 +91,44 @@ app.post('/verify', async (req, res) => {
             projectId: '1b54a5d583ce208cc28c1362cdd3d437',
         });
 
-        if (!isValid) {
-            throw new Error('Invalid signature');
-        }
+        if (!isValid) throw new Error('Invalid signature');
 
         req.session.siwe = { address, chainId };
         req.session.save(() => res.status(200).send(true));
     } catch (error) {
-        console.error('Verification error:', error.message);
+        console.error('❌ Verification error:', error.message);
         req.session.siwe = null;
         req.session.save(() => res.status(500).json({ message: error.message }));
     }
 });
 
-app.get('/session', (req, res) => {
-    res.setHeader('Content-Type', 'application/json');
-    res.send(req.session.siwe || null);
-});
+app.get('/session', (req, res) => res.json(req.session.siwe || null));
+app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send(true)));
 
-app.get('/signout', (req, res) => {
-    req.session.destroy(() => res.status(200).send(true));
-});
+// 🔥 WebSocket Connection Handling
+const connections = new Map();
 
-// 🔥 Track WebSocket Connections Per IP
-const connections = new Map(); 
+server.on('upgrade', (request, socket, head) => {
+    console.log(`🔄 WebSocket Upgrade Attempt for: ${request.url}`);
+
+    if (request.url.startsWith("/api/auth")) { 
+        console.log("✅ WebSocket upgrade accepted!");
+
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            console.log("🔥 WebSocket successfully upgraded!");
+            wss.emit("connection", ws, request);
+        });
+    } else {
+        console.log(`🚨 Invalid WebSocket request: ${request.url}`);
+        socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+        socket.destroy();
+    }
+});
 
 wss.on('connection', (ws, req) => {
     const ip = requestIp.getClientIp(req) || req.socket.remoteAddress;
 
-    // 🔥 Limit: Max 3 WebSocket connections per IP
-    if (!connections.has(ip)) {
-        connections.set(ip, 0);
-    }
+    if (!connections.has(ip)) connections.set(ip, 0);
     if (connections.get(ip) >= 3) {
         console.log(`🚨 Too many connections from ${ip}, closing WebSocket.`);
         ws.close(1008, "Too many connections");
@@ -140,30 +140,15 @@ wss.on('connection', (ws, req) => {
 
     ws.send(JSON.stringify({ message: 'Connected to WebSocket server.' }));
 
-    ws.on('message', (message) => {
-        console.log(`📩 Received from ${ip}: ${message}`);
-    });
-
+    ws.on('message', (message) => console.log(`📩 Received from ${ip}: ${message}`));
     ws.on('close', () => {
-        connections.set(ip, Math.max(0, connections.get(ip) - 1)); // Reduce count on close
+        connections.set(ip, Math.max(0, connections.get(ip) - 1));
         console.log(`❌ WebSocket closed from ${ip}. Remaining connections: ${connections.get(ip)}`);
     });
 });
 
-app.post('/api/auth', (req, res) => {
-    console.log('Auth request received.');
-    res.sendFile('/path/to/generated-qrcode.png');
-
-    setTimeout(() => {
-        for (const [clientId, ws] of connections.entries()) {
-            ws.send(JSON.stringify({ token: 'your-jwt-token-here' }));
-        }
-    }, 10000);
-});
-
+// Start the Server
 (async () => {
     await connectToMongoDB();
-    server.listen(PORT, () => {
-        console.log(`Server is running on port ${PORT}`);
-    });
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
 })();

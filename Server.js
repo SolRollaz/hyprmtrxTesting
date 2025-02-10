@@ -20,7 +20,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 const server = http.createServer(app); // Create HTTP server for WebSockets
-const wss = new WebSocketServer({ server }); // Create WebSocket server
+const wss = new WebSocketServer({ server, path: "/api/auth" }); // Ensure WebSocket listens on correct path
 
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
@@ -135,7 +135,7 @@ wss.on('connection', (ws) => {
 
 app.post('/api/auth', (req, res) => {
     console.log('Auth request received.');
-    res.sendFile('/path/to/generated-qrcode.png'); 
+    res.sendFile('/path/to/generated-qrcode.png');
 
     setTimeout(() => {
         for (const [clientId, ws] of clients.entries()) {

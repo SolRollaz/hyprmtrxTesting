@@ -11,39 +11,35 @@ import {
     getAddressFromMessage,
     getChainIdFromMessage,
 } from '@reown/appkit-siwe'; // SIWE utilities
+import { WebSocketServer } from 'ws'; // Import WebSocket Server
+import http from 'http'; // Needed to combine Express with WebSockets
 
 // Load environment variables from .env
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Server port
+const PORT = process.env.PORT || 3000;
+const server = http.createServer(app); // Create HTTP server for WebSockets
+const wss = new WebSocketServer({ server }); // Create WebSocket server
 
-// MongoDB Configuration
-const mongoUri = process.env.MONGO_URI; // Ensure this is set in your .env
-const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx'; // Default database name
-let db; // Global variable to hold the MongoDB connection
+const mongoUri = process.env.MONGO_URI;
+const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
+let db;
 
-/**
- * Middleware Setup
- */
-app.use(bodyParser.json()); // Parse JSON request bodies
-app.use(cors()); // Enable CORS
-app.use(helmet()); // Secure HTTP headers
+app.use(bodyParser.json());
+app.use(cors());
+app.use(helmet());
 
-// Session Middleware for SIWE
 app.use(
     session({
         name: 'siwe-session',
-        secret: 'siwe-quickstart-secret', // Replace with a strong secret in production
+        secret: 'siwe-quickstart-secret',
         resave: true,
         saveUninitialized: true,
-        cookie: { secure: false, sameSite: true }, // Adjust for your environment
+        cookie: { secure: false, sameSite: true },
     })
 );
 
-/**
- * Connect to MongoDB.
- */
 async function connectToMongoDB() {
     try {
         const client = new MongoClient(mongoUri, {
@@ -55,22 +51,14 @@ async function connectToMongoDB() {
         db = client.db(dbName);
     } catch (error) {
         console.error('Failed to connect to MongoDB:', error);
-        process.exit(1); // Exit if connection fails
+        process.exit(1);
     }
 }
 
-/**
- * Route: Health Check
- * Description: Verify if the server is running.
- */
 app.get('/', (req, res) => {
     res.status(200).send('API is running successfully.');
 });
 
-/**
- * Route: Get All Users
- * Description: Retrieve all users from the database.
- */
 app.get('/users', async (req, res) => {
     try {
         if (!db) {
@@ -85,17 +73,11 @@ app.get('/users', async (req, res) => {
     }
 });
 
-/**
- * SIWE Routes
- */
-
-// Route: Generate Nonce
 app.get('/nonce', (req, res) => {
     res.setHeader('Content-Type', 'text/plain');
     res.send(generateNonce());
 });
 
-// Route: Verify Signature
 app.post('/verify', async (req, res) => {
     try {
         const { message, signature } = req.body;
@@ -111,14 +93,13 @@ app.post('/verify', async (req, res) => {
             message,
             signature,
             chainId,
-            projectId: '1b54a5d583ce208cc28c1362cdd3d437', // Replace with your Reown project ID
+            projectId: '1b54a5d583ce208cc28c1362cdd3d437',
         });
 
         if (!isValid) {
             throw new Error('Invalid signature');
         }
 
-        // Save session
         req.session.siwe = { address, chainId };
         req.session.save(() => res.status(200).send(true));
     } catch (error) {
@@ -128,23 +109,44 @@ app.post('/verify', async (req, res) => {
     }
 });
 
-// Route: Retrieve Session
 app.get('/session', (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.send(req.session.siwe || null);
 });
 
-// Route: Sign Out
 app.get('/signout', (req, res) => {
     req.session.destroy(() => res.status(200).send(true));
 });
 
-/**
- * Start the Server
- */
+const clients = new Map();
+
+wss.on('connection', (ws) => {
+    console.log('New WebSocket connection established.');
+    const clientId = Math.random().toString(36).substr(2, 9);
+    clients.set(clientId, ws);
+
+    ws.send(JSON.stringify({ message: 'Connected to WebSocket server.' }));
+
+    ws.on('close', () => {
+        console.log(`WebSocket client disconnected: ${clientId}`);
+        clients.delete(clientId);
+    });
+});
+
+app.post('/api/auth', (req, res) => {
+    console.log('Auth request received.');
+    res.sendFile('/path/to/generated-qrcode.png'); 
+
+    setTimeout(() => {
+        for (const [clientId, ws] of clients.entries()) {
+            ws.send(JSON.stringify({ token: 'your-jwt-token-here' }));
+        }
+    }, 10000);
+});
+
 (async () => {
-    await connectToMongoDB(); // Connect to MongoDB before starting the server
-    app.listen(PORT, () => {
+    await connectToMongoDB();
+    server.listen(PORT, () => {
         console.log(`Server is running on port ${PORT}`);
     });
 })();

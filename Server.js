@@ -1,45 +1,45 @@
-import dotenv from 'dotenv'; // Load environment variables
-import express from 'express'; // Import Express
-import { MongoClient } from 'mongodb'; // MongoDB client
-import bodyParser from 'body-parser'; // Parse request bodies
-import cors from 'cors'; // Handle cross-origin requests
-import helmet from 'helmet'; // Secure HTTP headers
-import session from 'express-session'; // Manage user sessions
-import { generateNonce } from 'siwe'; // Generate nonce for SIWE
+// Load dependencies
+import dotenv from 'dotenv';
+import express from 'express';
+import { MongoClient } from 'mongodb';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import helmet from 'helmet';
+import session from 'express-session';
+import { generateNonce } from 'siwe';
 import {
     verifySignature,
     getAddressFromMessage,
     getChainIdFromMessage,
-} from '@reown/appkit-siwe'; // SIWE utilities
-import { WebSocketServer } from 'ws'; // Import WebSocket Server
-import http from 'http'; // Needed to combine Express with WebSockets
-import requestIp from 'request-ip'; // Get client IP for WebSocket tracking
+} from '@reown/appkit-siwe';
+import { WebSocketServer } from 'ws';
+import http from 'http';
+import requestIp from 'request-ip';
 
-// Load environment variables from .env
+// Load environment variables
 dotenv.config();
 
+// Express & WebSocket Setup
 const app = express();
-const PORT = process.env.PORT || 4000; // ✅ Ensure port 4000 is used
-const server = http.createServer(app); // Create HTTP server for WebSockets
-const wss = new WebSocketServer({ noServer: true }); // ✅ Handle WebSocket upgrade manually
+const PORT = process.env.PORT || 4000;
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer: true });
 
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
 let db;
 
-app.use(bodyParser.json());
-app.use(cors());
-app.use(helmet());
-
-app.use(
-    session({
-        name: 'siwe-session',
-        secret: 'siwe-quickstart-secret',
-        resave: true,
-        saveUninitialized: true,
-        cookie: { secure: false, sameSite: true },
-    })
-);
+// ✅ FIX: Handle WebSocket upgrades BEFORE Express middleware
+server.on('upgrade', (request, socket, head) => {
+    if (request.url === "/api/auth") {
+        console.log("🔥 Upgrading connection to WebSocket...");
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit("connection", ws, request);
+        });
+    } else {
+        socket.destroy();
+    }
+});
 
 // 🔥 Connect to MongoDB
 async function connectToMongoDB() {
@@ -57,8 +57,24 @@ async function connectToMongoDB() {
     }
 }
 
+// ✅ Express Middleware (After WebSocket Setup)
+app.use(bodyParser.json());
+app.use(cors());
+app.use(helmet());
+
+app.use(
+    session({
+        name: 'siwe-session',
+        secret: 'siwe-quickstart-secret',
+        resave: true,
+        saveUninitialized: true,
+        cookie: { secure: false, sameSite: true },
+    })
+);
+
 // API Routes
 app.get('/', (req, res) => res.status(200).send('API is running successfully.'));
+
 app.get('/users', async (req, res) => {
     try {
         if (!db) return res.status(500).json({ error: 'Database connection not established.' });
@@ -107,18 +123,6 @@ app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send
 
 // 🔥 WebSocket Connection Handling
 const connections = new Map();
-
-// 🛠 FIX: Ensure Express doesn't intercept WebSocket requests
-server.on('upgrade', (request, socket, head) => {
-    if (request.url === "/api/auth") {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-            wss.emit("connection", ws, request);
-        });
-    } else {
-        socket.destroy();
-    }
-});
-
 
 wss.on('connection', (ws, req) => {
     const ip = requestIp.getClientIp(req) || req.socket.remoteAddress;

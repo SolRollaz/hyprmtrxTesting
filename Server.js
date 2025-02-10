@@ -13,6 +13,7 @@ import {
 } from '@reown/appkit-siwe'; // SIWE utilities
 import { WebSocketServer } from 'ws'; // Import WebSocket Server
 import http from 'http'; // Needed to combine Express with WebSockets
+import requestIp from 'request-ip'; // Get client IP for WebSocket tracking
 
 // Load environment variables from .env
 dotenv.config();
@@ -118,18 +119,34 @@ app.get('/signout', (req, res) => {
     req.session.destroy(() => res.status(200).send(true));
 });
 
-const clients = new Map();
+// 🔥 Track WebSocket Connections Per IP
+const connections = new Map(); 
 
-wss.on('connection', (ws) => {
-    console.log('New WebSocket connection established.');
-    const clientId = Math.random().toString(36).substr(2, 9);
-    clients.set(clientId, ws);
+wss.on('connection', (ws, req) => {
+    const ip = requestIp.getClientIp(req) || req.socket.remoteAddress;
+
+    // 🔥 Limit: Max 3 WebSocket connections per IP
+    if (!connections.has(ip)) {
+        connections.set(ip, 0);
+    }
+    if (connections.get(ip) >= 3) {
+        console.log(`🚨 Too many connections from ${ip}, closing WebSocket.`);
+        ws.close(1008, "Too many connections");
+        return;
+    }
+
+    connections.set(ip, connections.get(ip) + 1);
+    console.log(`✅ WebSocket connected from ${ip} (Connections: ${connections.get(ip)})`);
 
     ws.send(JSON.stringify({ message: 'Connected to WebSocket server.' }));
 
+    ws.on('message', (message) => {
+        console.log(`📩 Received from ${ip}: ${message}`);
+    });
+
     ws.on('close', () => {
-        console.log(WebSocket client disconnected: ${clientId});
-        clients.delete(clientId);
+        connections.set(ip, Math.max(0, connections.get(ip) - 1)); // Reduce count on close
+        console.log(`❌ WebSocket closed from ${ip}. Remaining connections: ${connections.get(ip)}`);
     });
 });
 
@@ -138,7 +155,7 @@ app.post('/api/auth', (req, res) => {
     res.sendFile('/path/to/generated-qrcode.png');
 
     setTimeout(() => {
-        for (const [clientId, ws] of clients.entries()) {
+        for (const [clientId, ws] of connections.entries()) {
             ws.send(JSON.stringify({ token: 'your-jwt-token-here' }));
         }
     }, 10000);
@@ -147,6 +164,6 @@ app.post('/api/auth', (req, res) => {
 (async () => {
     await connectToMongoDB();
     server.listen(PORT, () => {
-        console.log(Server is running on port ${PORT});
+        console.log(`Server is running on port ${PORT}`);
     });
 })();

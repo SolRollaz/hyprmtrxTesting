@@ -1,27 +1,26 @@
-import dotenv from 'dotenv'; // Load environment variables
-import express from 'express'; // Import Express
-import { MongoClient } from 'mongodb'; // MongoDB client
-import bodyParser from 'body-parser'; // Parse request bodies
-import cors from 'cors'; // Handle cross-origin requests
-import helmet from 'helmet'; // Secure HTTP headers
-import session from 'express-session'; // Manage user sessions
-import { generateNonce } from 'siwe'; // Generate nonce for SIWE
+import dotenv from 'dotenv';
+import express from 'express';
+import { MongoClient } from 'mongodb';
+import bodyParser from 'body-parser';
+import cors from 'cors';
+import helmet from 'helmet';
+import session from 'express-session';
+import { generateNonce } from 'siwe';
 import {
     verifySignature,
     getAddressFromMessage,
     getChainIdFromMessage,
-} from '@reown/appkit-siwe'; // SIWE utilities
-import { WebSocketServer } from 'ws'; // Import WebSocket Server
-import http from 'http'; // Needed to combine Express with WebSockets
-import requestIp from 'request-ip'; // Get client IP for WebSocket tracking
+} from '@reown/appkit-siwe';
+import { WebSocketServer } from 'ws';
+import http from 'http';
+import requestIp from 'request-ip';
 
-// Load environment variables from .env
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
-const server = http.createServer(app); // Create HTTP server for WebSockets
-const wss = new WebSocketServer({ noServer: true }); // WebSockets manually upgrade
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer: true });
 
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
@@ -41,7 +40,6 @@ app.use(
     })
 );
 
-// 🔥 Connect to MongoDB
 async function connectToMongoDB() {
     try {
         const client = new MongoClient(mongoUri, {
@@ -57,8 +55,9 @@ async function connectToMongoDB() {
     }
 }
 
-// API Routes
+// API ROUTES
 app.get('/', (req, res) => res.status(200).send('API is running successfully.'));
+
 app.get('/users', async (req, res) => {
     try {
         if (!db) return res.status(500).json({ error: 'Database connection not established.' });
@@ -105,7 +104,7 @@ app.post('/verify', async (req, res) => {
 app.get('/session', (req, res) => res.json(req.session.siwe || null));
 app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send(true)));
 
-// 🔥 Fix WebSocket Upgrade Handling (No More 404s)
+// 🔥 FIX WEBSOCKET UPGRADE (NO MORE 404s)
 server.on('upgrade', (request, socket, head) => {
     if (request.url === "/api/auth") {
         console.log("🔄 WebSocket upgrade request received on /api/auth");
@@ -118,7 +117,7 @@ server.on('upgrade', (request, socket, head) => {
     }
 });
 
-// 🔥 WebSocket Connection Tracking (Rate Limit)
+// 🔥 WebSocket Connection Tracking
 const connections = new Map();
 
 wss.on('connection', (ws, req) => {
@@ -143,7 +142,7 @@ wss.on('connection', (ws, req) => {
     });
 });
 
-// Start the Server
+// Start Server
 (async () => {
     await connectToMongoDB();
     server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

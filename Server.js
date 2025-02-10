@@ -124,27 +124,35 @@ app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send
 // 🔥 WebSocket Connection Handling
 const connections = new Map();
 
-wss.on('connection', (ws, req) => {
-    const ip = requestIp.getClientIp(req) || req.socket.remoteAddress;
+wss.on('connection', async (ws, req) => {
+    console.log(`✅ WebSocket connected from ${req.socket.remoteAddress}`);
 
-    if (!connections.has(ip)) connections.set(ip, 0);
-    if (connections.get(ip) >= 3) {
-        console.log(`🚨 Too many connections from ${ip}, closing WebSocket.`);
-        ws.close(1008, "Too many connections");
-        return;
-    }
+    ws.on('message', async (message) => {
+        try {
+            const data = JSON.parse(message);
+            console.log("📩 Received WebSocket Message:", data);
 
-    connections.set(ip, connections.get(ip) + 1);
-    console.log(`✅ WebSocket connected from ${ip} (Connections: ${connections.get(ip)})`);
+            if (data.action === "authenticateUser") {
+                console.log("⚡ Generating QR Code...");
 
-    ws.send(JSON.stringify({ message: 'Connected to WebSocket server.' }));
+                const qrCodeResult = await qrCodeAuth.generateAuthenticationQRCode();
 
-    ws.on('message', (message) => console.log(`📩 Received from ${ip}: ${message}`));
+                if (qrCodeResult.status === "success") {
+                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qr_code_path }));
+                } else {
+                    ws.send(JSON.stringify({ error: "QR Code generation failed" }));
+                }
+            }
+        } catch (err) {
+            console.error("❌ WebSocket Message Error:", err);
+        }
+    });
+
     ws.on('close', () => {
-        connections.set(ip, Math.max(0, connections.get(ip) - 1));
-        console.log(`❌ WebSocket closed from ${ip}. Remaining connections: ${connections.get(ip)}`);
+        console.log(`❌ WebSocket closed from ${req.socket.remoteAddress}`);
     });
 });
+
 
 // Start the Server
 (async () => {

@@ -19,9 +19,9 @@ import requestIp from 'request-ip'; // Get client IP for WebSocket tracking
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 4000;
 const server = http.createServer(app); // Create HTTP server for WebSockets
-const wss = new WebSocketServer({ noServer: true }); // Fix: No fixed path, manually upgrade
+const wss = new WebSocketServer({ noServer: true }); // WebSockets manually upgrade
 
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
@@ -105,18 +105,21 @@ app.post('/verify', async (req, res) => {
 app.get('/session', (req, res) => res.json(req.session.siwe || null));
 app.get('/signout', (req, res) => req.session.destroy(() => res.status(200).send(true)));
 
-// 🔥 WebSocket Connection Tracking (Rate Limit)
-const connections = new Map();
-
+// 🔥 Fix WebSocket Upgrade Handling (No More 404s)
 server.on('upgrade', (request, socket, head) => {
     if (request.url === "/api/auth") {
+        console.log("🔄 WebSocket upgrade request received on /api/auth");
         wss.handleUpgrade(request, socket, head, (ws) => {
             wss.emit("connection", ws, request);
         });
     } else {
+        console.log(`🚨 Invalid WebSocket request: ${request.url}`);
         socket.destroy();
     }
 });
+
+// 🔥 WebSocket Connection Tracking (Rate Limit)
+const connections = new Map();
 
 wss.on('connection', (ws, req) => {
     const ip = requestIp.getClientIp(req) || req.socket.remoteAddress;
@@ -138,17 +141,6 @@ wss.on('connection', (ws, req) => {
         connections.set(ip, Math.max(0, connections.get(ip) - 1));
         console.log(`❌ WebSocket closed from ${ip}. Remaining connections: ${connections.get(ip)}`);
     });
-});
-
-app.post('/api/auth', (req, res) => {
-    console.log('🔑 Auth request received.');
-    res.sendFile('/path/to/generated-qrcode.png');
-
-    setTimeout(() => {
-        for (const [clientId, ws] of connections.entries()) {
-            ws.send(JSON.stringify({ token: 'your-jwt-token-here' }));
-        }
-    }, 10000);
 });
 
 // Start the Server

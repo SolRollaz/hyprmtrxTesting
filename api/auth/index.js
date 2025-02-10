@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express'; // Use `import` for consistency in ES modules
 import AuthEndpoint from './AuthEndpoint.js'; // Correct path to AuthEndpoint
+import cors from 'cors'
 
 // Specify the path to .env explicitly
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -13,16 +14,38 @@ console.log("Current Working Directory:", process.cwd());
 // Create an Express app
 const app = express();
 
+
+// Enable CORS for requests from hyprmtrx.com
+app.use(
+    cors({
+        origin: "https://hyprmtrx.com", // Allow only this domain
+        methods: "GET,POST,PUT,DELETE,OPTIONS",
+        allowedHeaders: "Content-Type,Authorization",
+        credentials: true, // If using cookies/sessions
+    })
+);
+
+
 // Middleware to parse JSON requests
 app.use(express.json());
+
+app.use(express.static("public"));
 
 // Create an instance of the AuthEndpoint class
 const authAPI = new AuthEndpoint();
 
 // Define the API route
 app.post('/api/auth', (req, res) => {
-    authAPI.handleRequest(req, res); // Delegate to the AuthEndpoint handler
+    try{
+        authAPI.handleRequest(req, res); // Delegate to the AuthEndpoint handler
+    }catch(e) {
+        console.log(e);
+    }
 });
+
+app.get("/.well-known/walletconnect.txt", (req, res) => {
+    res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
+  });
 
 // Generate QR Code API
 app.get("/api/generate-qr", async (req, res) => {

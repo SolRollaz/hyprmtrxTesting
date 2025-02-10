@@ -34,6 +34,7 @@ class SystemConfig {
                 icons: [process.env.APP_ICON_URL || "https://hyprmtrx.xyz/favicon.png"], // Fallback app icon
             },
             qrCodeBaseUrl: process.env.QR_CODE_BASE_URL || "https://hyprmtrx.xyz/qr-codes", // Placeholder QR code base URL
+            relayUrl: "wss://relay.walletconnect.org"
         };
 
         // Debug: Log supported networks

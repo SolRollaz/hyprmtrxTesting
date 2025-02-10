@@ -12,7 +12,13 @@
 
     "@stardust-collective/dag4": "^2.2.2",
 
+    "@walletconnect/client": "^1.8.0",
+
     "@walletconnect/core": "^2.17.3",
+
+    "@walletconnect/node": "^1.0.0",
+
+    "@walletconnect/sign-client": "^2.18.0",
 
     "@walletconnect/utils": "^2.17.3",
 
@@ -58,6 +64,8 @@
 
     "wagmi": "^2.14.6",
 
+    "walletconnect": "^1.7.8",
+
     "web3": "^4.16.0"
 
   },
@@ -74,7 +82,7 @@
 
   },
 
-  "name": "root",
+  "name": "HVM",
 
   "version": "1.0.0",
 

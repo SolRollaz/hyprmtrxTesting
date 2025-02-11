@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import requestIp from 'request-ip';
 import AuthEndpoint from './api/auth/AuthEndpoint.js';
+import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();

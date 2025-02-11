@@ -21,11 +21,6 @@ class AuthEndpoint {
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
     }
 
-    /**
-     * 🔥 Handles incoming authentication requests.
-     * - Checks if the request contains the correct auth parameter.
-     * - Generates and sends a QR Code if valid.
-     */
     async handleRequest(req, res) {
         console.log("📩 Incoming Auth Request:", req.body);
 
@@ -41,11 +36,6 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * ✅ Generates and returns a QR Code via HTTP response.
-     * - Fetches QR code path from `QRCodeAuth`.
-     * - Streams the QR code as an image response.
-     */
     async handleQRCodeRequest(res) {
         try {
             const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
@@ -84,9 +74,6 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * ✅ Handles QR Code retrieval (for alternative method).
-     */
     async handleQRCode(req, res) {
         try {
             const result = await this.qrCodeAuth_NEW.generateAuthenticationQRCode();
@@ -96,9 +83,6 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * ✅ Verifies Web3 signatures via QR authentication.
-     */
     async handleVerifySignature(req, res) {
         const { sessionId, signature, message } = req.body;
         try {
@@ -112,10 +96,6 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * ✅ Handles WebSocket messages for QR authentication.
-     * - Generates and sends QR Code to WebSocket clients.
-     */
     async handleWebSocketMessage(ws, message) {
         try {
             const data = JSON.parse(message);

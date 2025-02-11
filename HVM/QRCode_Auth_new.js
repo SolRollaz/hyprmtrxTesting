@@ -1,4 +1,4 @@
-// QRCodeAuth.js - Fix detecting signed messages
+// QRCodeAuth.js - Fully Restored with Fixes
 import { Core } from "@walletconnect/core";
 import qrCode from "qrcode";
 import path from "path";
@@ -14,9 +14,16 @@ class QRCodeAuth {
         this.dbName = dbName;
         this.systemConfig = systemConfig;
         this.qrCodeDir = path.join(process.cwd(), "QR_Codes");
-        this.ensureQRCodeDirectory();
+        this.ensureQRCodeDirectory(); // ✅ Fix: Ensure directory is created
         this.core = this.initializeCore();
         this.sessions = new Map(); // Store active Web3 authentication sessions
+    }
+
+    ensureQRCodeDirectory() {
+        if (!fs.existsSync(this.qrCodeDir)) {
+            fs.mkdirSync(this.qrCodeDir, { recursive: true });
+            console.log("✅ QR Code directory created at", this.qrCodeDir);
+        }
     }
 
     initializeCore() {
@@ -79,4 +86,5 @@ class QRCodeAuth {
         }
     }
 }
+
 export default QRCodeAuth;

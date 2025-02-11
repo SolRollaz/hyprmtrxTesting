@@ -1,67 +1,86 @@
-// Load environment variables from the .env file
 import dotenv from 'dotenv';
 import path from 'path';
-import express from 'express'; // Use `import` for consistency in ES modules
-import AuthEndpoint from './AuthEndpoint.js'; // Correct path to AuthEndpoint
-import cors from 'cors'
+import express from 'express';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import AuthEndpoint from './AuthEndpoint.js';
+import cors from 'cors';
 
-// Specify the path to .env explicitly
+// Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 console.log("Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("Current Working Directory:", process.cwd());
 
-// Create an Express app
+// Create Express app
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer: true });
 
-
-// Enable CORS for requests from hyprmtrx.com
+// Enable CORS
 app.use(
     cors({
-        origin: "https://hyprmtrx.com", // Allow only this domain
+        origin: "https://hyprmtrx.com",
         methods: "GET,POST,PUT,DELETE,OPTIONS",
         allowedHeaders: "Content-Type,Authorization",
-        credentials: true, // If using cookies/sessions
+        credentials: true,
     })
 );
 
-
 // Middleware to parse JSON requests
 app.use(express.json());
-
 app.use(express.static("public"));
 
-// Create an instance of the AuthEndpoint class
+// Initialize AuthEndpoint instance
 const authAPI = new AuthEndpoint();
 
-// Define the API route
+// API Routes
 app.post('/api/auth', (req, res) => {
-    try{
-        authAPI.handleRequest(req, res); // Delegate to the AuthEndpoint handler
-    }catch(e) {
-        console.log(e);
+    try {
+        authAPI.handleRequest(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/auth:", e);
+        res.status(500).json({ error: e.message });
     }
 });
 
 app.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
-  });
+});
 
-// Generate QR Code API
 app.get("/api/generate-qr", async (req, res) => {
-    authAPI.handleQRCode(req, res);
+    try {
+        await authAPI.handleQRCode(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/generate-qr:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// Verify Signature API
 app.post("/api/verify-signature", async (req, res) => {
-    authAPI.handleVerifySignature(req, res);
+    try {
+        await authAPI.handleVerifySignature(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/verify-signature:", e);
+        res.status(500).json({ error: e.message });
+    }
 });
 
-// Define the port for the API
-const PORT = process.env.PORT || 3000; // Use environment variable or default to 3000
+// WebSocket Handling
+server.on('upgrade', (request, socket, head) => {
+    if (request.url === "/api/auth") {
+        console.log("🔥 Upgrading connection to WebSocket...");
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            authAPI.handleWebSocketMessage(ws);
+        });
+    } else {
+        socket.destroy();
+    }
+});
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Authentication API running at http://127.0.0.1:${PORT}/api/auth`);
-    console.log(`Public access via Nginx at https://hyprmtrx.xyz/api/auth`);
+// Start Server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`🚀 Authentication API running at http://127.0.0.1:${PORT}/api/auth`);
+    console.log(`🌐 Public access at https://hyprmtrx.xyz/api/auth`);
 });

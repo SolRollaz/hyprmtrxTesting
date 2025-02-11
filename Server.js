@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 
 // Load environment variables
 dotenv.config();
-@@ -29,7 +30,9 @@ const mongoUri = process.env.MONGO_URI;
+const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
 let db;
 

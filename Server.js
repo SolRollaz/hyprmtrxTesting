@@ -1,4 +1,4 @@
-// Server File - Ensure CORS is properly applied
+// Server File - Fix CORS Issues
 import dotenv from 'dotenv';
 import express from 'express';
 import { MongoClient } from 'mongodb';
@@ -32,14 +32,43 @@ let db;
 
 const authEndpoint = new AuthEndpoint();
 
-// Ensure CORS is applied globally before any routes
+// ✅ Ensure CORS is applied first
 app.use(cors({
     origin: "https://hyprmtrx.com",
     methods: "GET,POST,PUT,DELETE,OPTIONS",
     allowedHeaders: "Content-Type,Authorization",
     credentials: true
 }));
-app.options("*", cors()); // Allow preflight requests globally
+app.options("*", (req, res) => {
+    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.sendStatus(204);
+});
+
+// Middleware
+app.use(bodyParser.json());
+app.use(helmet());
+app.use(
+    session({
+        name: 'siwe-session',
+        secret: 'siwe-quickstart-secret',
+        resave: true,
+        saveUninitialized: true,
+        cookie: { secure: false, sameSite: true },
+    })
+);
+
+// API Routes
+app.get('/', (req, res) => {
+    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    res.status(200).send('API is running successfully.');
+});
+app.post('/api/auth', (req, res) => {
+    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    authEndpoint.handleRequest(req, res);
+});
 
 // Handle WebSocket upgrades
 server.on('upgrade', (request, socket, head) => {
@@ -65,24 +94,6 @@ async function connectToMongoDB() {
         process.exit(1);
     }
 }
-
-// Express Middleware
-app.use(bodyParser.json());
-app.use(helmet());
-
-app.use(
-    session({
-        name: 'siwe-session',
-        secret: 'siwe-quickstart-secret',
-        resave: true,
-        saveUninitialized: true,
-        cookie: { secure: false, sameSite: true },
-    })
-);
-
-// API Routes
-app.get('/', (req, res) => res.status(200).send('API is running successfully.'));
-app.post('/api/auth', (req, res) => authEndpoint.handleRequest(req, res));
 
 // WebSocket Handling
 wss.on("connection", (ws) => {

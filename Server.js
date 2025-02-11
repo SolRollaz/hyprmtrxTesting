@@ -1,4 +1,4 @@
-// Load dependencies
+// Server File - Ensure CORS is properly applied
 import dotenv from 'dotenv';
 import express from 'express';
 import { MongoClient } from 'mongodb';
@@ -32,6 +32,15 @@ let db;
 
 const authEndpoint = new AuthEndpoint();
 
+// Ensure CORS is applied globally before any routes
+app.use(cors({
+    origin: "https://hyprmtrx.com",
+    methods: "GET,POST,PUT,DELETE,OPTIONS",
+    allowedHeaders: "Content-Type,Authorization",
+    credentials: true
+}));
+app.options("*", cors()); // Allow preflight requests globally
+
 // Handle WebSocket upgrades
 server.on('upgrade', (request, socket, head) => {
     if (request.url === "/api/auth") {
@@ -59,7 +68,6 @@ async function connectToMongoDB() {
 
 // Express Middleware
 app.use(bodyParser.json());
-app.use(cors());
 app.use(helmet());
 
 app.use(

@@ -17,7 +17,7 @@ const authEndpoint = new AuthEndpoint();
 server.on('upgrade', (request, socket, head) => {
 if (request.url === "/api/auth") {
 console.log("🔥 Upgrading connection to WebSocket...");
-@@ -41,13 +44,10 @@ server.on('upgrade', (request, socket, head) => {
+server.on('upgrade', (request, socket, head) => {
 }
 });
 
@@ -33,7 +33,7 @@ try {
 await client.connect();
 console.log('✅ Connected to MongoDB');
 db = client.db(dbName);
-@@ -57,7 +57,7 @@ async function connectToMongoDB() {
+async function connectToMongoDB() {
 }
 }
 

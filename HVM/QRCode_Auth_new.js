@@ -17,7 +17,7 @@ class QRCodeAuth {
         this.qrCodeDir = path.join(process.cwd(), "QR_Codes");
         this.ensureQRCodeDirectory();
         this.core = this.initializeCore();
-        this.sessions = new Map(); // Store active sessions
+        this.sessions = new Map(); // Store active Web3 authentication sessions
     }
 
     ensureQRCodeDirectory() {
@@ -43,12 +43,12 @@ class QRCodeAuth {
         try {
             console.log("🚀 Starting QR Code Generation...");
 
-            // Step 1: Create a pairing URI
+            // Step 1: Create a WalletConnect pairing URI
             const pairing = await this.core.pairing.create();
             const uri = pairing.uri;
 
             if (!uri) {
-                throw new Error("Failed to generate WalletConnect URI.");
+                throw new Error("❌ Failed to generate WalletConnect URI.");
             }
 
             console.log("🔗 WalletConnect URI Created:", uri);
@@ -80,21 +80,31 @@ class QRCodeAuth {
     }
 
     async verifySignature(sessionId, signature, message) {
-        const session = this.sessions.get(sessionId);
-        if (!session) {
-            throw new Error("Invalid session ID.");
+        if (!this.sessions.has(sessionId)) {
+            throw new Error("❌ Invalid session ID.");
         }
 
         try {
-            // Use the WalletConnect SDK to verify the signature
-            const verified = this.core.verify({ uri: session.uri, signature, message });
+            // Retrieve session info
+            const session = this.sessions.get(sessionId);
+            console.log("🔎 Verifying signature for session:", sessionId);
 
-            if (verified) {
-                session.status = "authenticated";
-                return { status: "success", message: "Authentication successful." };
-            } else {
-                throw new Error("Invalid signature.");
+            // Validate signature using WalletConnect
+            const verified = this.core.verify({
+                uri: session.uri,
+                signature,
+                message
+            });
+
+            if (!verified) {
+                throw new Error("❌ Invalid signature.");
             }
+
+            // Mark session as authenticated
+            session.status = "authenticated";
+            console.log(`✅ Session ${sessionId} authenticated successfully.`);
+            return { status: "success", message: "Authentication successful." };
+
         } catch (error) {
             console.error("❌ Error verifying signature:", error.message);
             throw new Error("Signature verification failed.");

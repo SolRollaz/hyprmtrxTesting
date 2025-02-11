@@ -19,6 +19,7 @@ class AuthEndpoint {
         this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
+        this.webSocketClients = new Map(); // Store WebSocket connections
     }
 
     async handleRequest(req, res) {
@@ -59,62 +60,57 @@ class AuthEndpoint {
 
             const qrStream = fs.createReadStream(qrCodePath);
             qrStream.pipe(res);
-
-            qrStream.on("close", () => {
-                console.log(`✅ QR Code successfully streamed to the client: ${qrCodePath}`);
-            });
-
-            qrStream.on("error", (error) => {
-                console.error("❌ Error streaming the QR Code file:", error.message);
-                res.status(500).json({ status: "failure", message: "Error streaming the QR Code file." });
-            });
         } catch (error) {
             console.error("❌ Error generating QR code:", error.message);
             return res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
         }
     }
 
-    async handleQRCode(req, res) {
-        try {
-            const result = await this.qrCodeAuth_NEW.generateAuthenticationQRCode();
-            res.json(result);
-        } catch (error) {
-            res.status(500).json({ status: "failure", message: error.message });
-        }
-    }
+    async handleWebSocketConnection(ws) {
+        console.log("✅ WebSocket Client Connected");
+        const clientId = Date.now().toString(); // Generate a unique client ID
+        this.webSocketClients.set(clientId, ws);
 
-    async handleVerifySignature(req, res) {
-        const { sessionId, signature, message } = req.body;
-        try {
-            if (!sessionId || !signature || !message) {
-                throw new Error("Missing sessionId, signature, or message.");
-            }
-            const result = await this.qrCodeAuth_NEW.verifySignature(sessionId, signature, message);
-            res.json(result);
-        } catch (error) {
-            res.status(400).json({ status: "failure", message: error.message });
-        }
-    }
+        ws.on("message", async (message) => {
+            try {
+                const data = JSON.parse(message);
+                console.log("📩 WebSocket Received:", data);
 
-    async handleWebSocketMessage(ws, message) {
-        try {
-            const data = JSON.parse(message);
-            console.log("📩 WebSocket Received:", data);
+                if (data.action === "authenticateUser") {
+                    console.log("⚡ Generating QR Code...");
+                    const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
 
-            if (data.action === "authenticateUser") {
-                console.log("⚡ Generating QR Code...");
-                const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
+                    if (qrCodeResult.status !== "success") {
+                        console.error("❌ QR Code generation failed:", qrCodeResult.message);
+                        return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
+                    }
 
-                if (qrCodeResult.status !== "success") {
-                    console.error("❌ QR Code generation failed:", qrCodeResult.message);
-                    return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
+                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
                 }
-
-                ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
+            } catch (error) {
+                console.error("❌ Error processing WebSocket message:", error);
+                ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
             }
-        } catch (error) {
-            console.error("❌ Error processing WebSocket message:", error);
-            ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
+        });
+
+        ws.on("close", () => {
+            console.log("❌ WebSocket Client Disconnected");
+            this.webSocketClients.delete(clientId);
+        });
+
+        ws.on("error", (error) => {
+            console.error("⚠️ WebSocket Error:", error);
+        });
+    }
+
+    async sendJWTToClient(sessionId, token) {
+        for (const [clientId, ws] of this.webSocketClients) {
+            if (ws.readyState === ws.OPEN) {
+                console.log("✅ Sending JWT to client:", clientId);
+                ws.send(JSON.stringify({ token }));
+                ws.close(); // Close connection after sending JWT
+                this.webSocketClients.delete(clientId);
+            }
         }
     }
 }

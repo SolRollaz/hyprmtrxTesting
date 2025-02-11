@@ -5,6 +5,7 @@ import http from 'http';
 import { WebSocketServer } from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
@@ -34,8 +35,17 @@ app.use(express.static("public"));
 // Initialize AuthEndpoint instance
 const authAPI = new AuthEndpoint();
 
+// Rate Limiting: Restrict /api/auth requests to 5 per minute per IP
+const authLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 5, // Limit each IP to 5 requests per windowMs
+    message: { status: "failure", message: "Too many authentication attempts. Try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
 // API Routes
-app.post('/api/auth', (req, res) => {
+app.post('/api/auth', authLimiter, (req, res) => {
     try {
         authAPI.handleRequest(req, res);
     } catch (e) {

@@ -1,118 +1,216 @@
-import express from "express";
-import QR_Code_Auth from "../../HVM/QRCode_Auth.js";
-import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
-import SystemConfig from "../../systemConfig.js";
-import { MongoClient } from "mongodb";
-import fs from "fs";
+import dotenv from 'dotenv';
+import path from 'path';
+import express from 'express';
+import http from 'http';
+import { WebSocketServer } from 'ws';
+import AuthEndpoint from './AuthEndpoint.js';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+
+// Load environment variables
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+
+console.log("Loaded Mongo URI:", process.env.MONGO_URI);
+console.log("Current Working Directory:", process.cwd());
+
+// Create Express app
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ noServer: true });
+
+// Enable CORS
+app.use(
+    cors({
+        origin: "https://hyprmtrx.com",
+        methods: "GET,POST,PUT,DELETE,OPTIONS",
+        allowedHeaders: "Content-Type,Authorization",
+        credentials: true,
+    })
+);
+
+// Middleware to parse JSON requests
+app.use(express.json());
+app.use(express.static("public"));
+
+// Initialize AuthEndpoint instance
+const authAPI = new AuthEndpoint();
+
+// Rate Limiting: Restrict /api/auth requests to 5 per minute per IP
+const authLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 5, // Limit each IP to 5 requests per windowMs
+    message: { status: "failure", message: "Too many authentication attempts. Try again later." },
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// API Routes
+app.post('/api/auth', authLimiter, (req, res) => {
+    try {
+        authAPI.handleRequest(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/auth:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/.well-known/walletconnect.txt", (req, res) => {
+    res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
+});
+
+app.get("/api/generate-qr", async (req, res) => {
+    try {
+        await authAPI.handleQRCode(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/generate-qr:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post("/api/verify-signature", async (req, res) => {
+    try {
+        await authAPI.handleVerifySignature(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/verify-signature:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+// WebSocket Handling
+server.on('upgrade', (request, socket, head) => {
+    if (request.url === "/api/auth") {
+        console.log("🔥 Upgrading connection to WebSocket...");
+        wss.handleUpgrade(request, socket, head, (ws) => {
+            authAPI.handleWebSocketMessage(ws);
+        });
+    } else {
+        socket.destroy();
+    }
+});
+
+// Start Server
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+    console.log(`🚀 Authentication API running at http://127.0.0.1:${PORT}/api/auth`);
+    console.log(`🌐 Public access at https://hyprmtrx.xyz/api/auth`);
+});
+
+
+Then QRCodeAuth.js is called to create a qr code and send it to the game.
+The user scans it with a web3 wallet, to authenticate it.
+
+import { Core } from "@walletconnect/core";
+import qrCode from "qrcode";
 import path from "path";
+import fs from "fs";
+import systemConfig from "../systemConfig.js";
 
-class AuthEndpoint {
-    constructor() {
-        this.systemConfig = new SystemConfig();
-        this.mongoUri = process.env.MONGO_URI || this.systemConfig.getMongoUri();
-        this.dbName = process.env.MONGO_DB_NAME || this.systemConfig.getMongoDbName();
-
-        if (!this.mongoUri || !this.dbName) {
-            throw new Error("❌ Mongo URI or DB Name is not defined.");
+class QRCodeAuth {
+    constructor(client, dbName, systemConfig) {
+        if (!client || !dbName || !systemConfig) {
+            throw new Error("MongoClient, dbName, and systemConfig are required to initialize QRCodeAuth.");
         }
 
-        this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
-        this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
-        this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
-        this.webSocketClients = new Map(); // Store WebSocket connections
+        this.client = client;
+        this.dbName = dbName;
+        this.systemConfig = systemConfig;
+
+        this.qrCodeDir = path.join(process.cwd(), "QR_Codes");
+        this.ensureQRCodeDirectory();
+        this.core = this.initializeCore();
+        this.sessions = new Map(); // Store active Web3 authentication sessions
     }
 
-    async handleRequest(req, res) {
-        console.log("📩 Incoming Auth Request:", req.body);
-
-        if (!req.body.auth || req.body.auth !== "auth") {
-            return res.status(400).json({ status: "failure", message: "Invalid or missing 'auth' parameter." });
-        }
-
-        try {
-            return await this.handleQRCodeRequest(res);
-        } catch (error) {
-            console.error("❌ Error handling request:", error.message);
-            return res.status(500).json({ status: "failure", message: "Internal server error." });
+    ensureQRCodeDirectory() {
+        if (!fs.existsSync(this.qrCodeDir)) {
+            fs.mkdirSync(this.qrCodeDir, { recursive: true });
+            console.log("📁 QR code directory created.");
         }
     }
 
-    async handleQRCodeRequest(res) {
+    initializeCore() {
+        console.log("🔄 Initializing WalletConnect Core...");
+        const core = new Core({
+            projectId: this.systemConfig.walletConnect.projectId,
+        });
+
+        core.relayer.on("relayer_connect", () => console.log("✅ Connected to WalletConnect relay server."));
+        core.relayer.on("relayer_disconnect", () => console.log("⚠️ Disconnected from WalletConnect relay server."));
+
+        return core;
+    }
+
+    async generateQRCode() {
         try {
-            const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
+            console.log("🚀 Starting QR Code Generation...");
 
-            if (qrCodeResult.status !== "success") {
-                console.error("❌ QR Code generation failed:", qrCodeResult.message);
-                return res.status(500).json({ status: "failure", message: qrCodeResult.message });
+            // Step 1: Create a WalletConnect pairing URI
+            const pairing = await this.core.pairing.create();
+            const uri = pairing.uri;
+
+            if (!uri) {
+                throw new Error("❌ Failed to generate WalletConnect URI.");
             }
 
-            const qrCodePath = qrCodeResult.qr_code_path;
+            console.log("🔗 WalletConnect URI Created:", uri);
 
-            if (!fs.existsSync(qrCodePath)) {
-                console.error("❌ QR Code file not found at path:", qrCodePath);
-                return res.status(500).json({ status: "failure", message: "QR Code file not found." });
-            }
+            // Step 2: Generate a unique session ID
+            const sessionId = `session_${Date.now()}`;
+            this.sessions.set(sessionId, { uri, status: "pending" });
 
-            console.log(`✅ Streaming QR Code from path: ${qrCodePath}`);
+            // Step 3: Save QR code to file
+            const filePath = path.join(this.qrCodeDir, `${sessionId}.png`);
+            await qrCode.toFile(filePath, uri);
 
-            res.setHeader("Content-Type", "image/png");
-            res.setHeader("Content-Disposition", `inline; filename=${path.basename(qrCodePath)}`);
+            console.log(`✅ QR Code saved: ${filePath}`);
 
-            const qrStream = fs.createReadStream(qrCodePath);
-            qrStream.pipe(res);
+            // Step 4: Generate a public URL for the QR code
+            const publicUrl = `${this.systemConfig.walletConnect.qrCodeBaseUrl}/${path.basename(filePath)}`;
+
+            return { 
+                status: "success",
+                sessionId, 
+                qrCodeUrl: publicUrl, 
+                walletConnectUri: uri 
+            };
+
         } catch (error) {
             console.error("❌ Error generating QR code:", error.message);
-            return res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
+            return { status: "failure", message: "QR Code generation error" };
         }
     }
 
-    async handleWebSocketConnection(ws) {
-        console.log("✅ WebSocket Client Connected");
-        const clientId = Date.now().toString(); // Generate a unique client ID
-        this.webSocketClients.set(clientId, ws);
+    async verifySignature(sessionId, signature, message) {
+        if (!this.sessions.has(sessionId)) {
+            throw new Error("❌ Invalid session ID.");
+        }
 
-        ws.on("message", async (message) => {
-            try {
-                const data = JSON.parse(message);
-                console.log("📩 WebSocket Received:", data);
+        try {
+            // Retrieve session info
+            const session = this.sessions.get(sessionId);
+            console.log("🔎 Verifying signature for session:", sessionId);
 
-                if (data.action === "authenticateUser") {
-                    console.log("⚡ Generating QR Code...");
-                    const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
+            // Validate signature using WalletConnect
+            const verified = this.core.verify({
+                uri: session.uri,
+                signature,
+                message
+            });
 
-                    if (qrCodeResult.status !== "success") {
-                        console.error("❌ QR Code generation failed:", qrCodeResult.message);
-                        return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
-                    }
-
-                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
-                }
-            } catch (error) {
-                console.error("❌ Error processing WebSocket message:", error);
-                ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
+            if (!verified) {
+                throw new Error("❌ Invalid signature.");
             }
-        });
 
-        ws.on("close", () => {
-            console.log("❌ WebSocket Client Disconnected");
-            this.webSocketClients.delete(clientId);
-        });
+            // Mark session as authenticated
+            session.status = "authenticated";
+            console.log(`✅ Session ${sessionId} authenticated successfully.`);
+            return { status: "success", message: "Authentication successful." };
 
-        ws.on("error", (error) => {
-            console.error("⚠️ WebSocket Error:", error);
-        });
-    }
-
-    async sendJWTToClient(sessionId, token) {
-        for (const [clientId, ws] of this.webSocketClients) {
-            if (ws.readyState === ws.OPEN) {
-                console.log("✅ Sending JWT to client:", clientId);
-                ws.send(JSON.stringify({ token }));
-                ws.close(); // Close connection after sending JWT
-                this.webSocketClients.delete(clientId);
-            }
+        } catch (error) {
+            console.error("❌ Error verifying signature:", error.message);
+            throw new Error("Signature verification failed.");
         }
     }
 }
 
-export default AuthEndpoint;
+export default QRCodeAuth;

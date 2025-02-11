@@ -1,4 +1,4 @@
-// Server File - Fix CORS Issues
+// Server.js - Fully Restored & Fixed
 import dotenv from 'dotenv';
 import express from 'express';
 import { MongoClient } from 'mongodb';
@@ -15,6 +15,7 @@ import {
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import requestIp from 'request-ip';
+import authRoutes from "./api/auth/index.js";
 import AuthEndpoint from './api/auth/AuthEndpoint.js';
 
 // Load environment variables
@@ -29,7 +30,6 @@ const wss = new WebSocketServer({ noServer: true });
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
 let db;
-
 const authEndpoint = new AuthEndpoint();
 
 // ✅ Ensure CORS is applied first
@@ -39,13 +39,7 @@ app.use(cors({
     allowedHeaders: "Content-Type,Authorization",
     credentials: true
 }));
-app.options("*", (req, res) => {
-    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.sendStatus(204);
-});
+app.options("*", cors());
 
 // Middleware
 app.use(bodyParser.json());
@@ -60,14 +54,13 @@ app.use(
     })
 );
 
+// ✅ Fix: Register API routes properly
+app.use("/api/auth", authRoutes);
+
 // API Routes
 app.get('/', (req, res) => {
     res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
     res.status(200).send('API is running successfully.');
-});
-app.post('/api/auth', (req, res) => {
-    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
-    authEndpoint.handleRequest(req, res);
 });
 
 // Handle WebSocket upgrades
@@ -98,7 +91,6 @@ async function connectToMongoDB() {
         process.exit(1);
     }
 }
-
 
 // WebSocket Handling
 wss.on("connection", (ws) => {

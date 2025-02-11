@@ -85,15 +85,20 @@ server.on('upgrade', (request, socket, head) => {
 // Connect to MongoDB
 async function connectToMongoDB() {
     try {
-        const client = new MongoClient(mongoUri, { useUnifiedTopology: true });
+        const client = new MongoClient(process.env.MONGO_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
+
         await client.connect();
-        console.log('✅ Connected to MongoDB');
-        db = client.db(dbName);
+        console.log('✅ Successfully connected to Digital Ocean MongoDB');
+        db = client.db(process.env.MONGO_DB_NAME);
     } catch (error) {
         console.error('❌ Failed to connect to MongoDB:', error);
         process.exit(1);
     }
 }
+
 
 // WebSocket Handling
 wss.on("connection", (ws) => {

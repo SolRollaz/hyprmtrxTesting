@@ -21,11 +21,12 @@ class QRCodeAuth {
     }
 
     ensureQRCodeDirectory() {
-        if (!fs.existsSync(this.qrCodeDir)) {
-            fs.mkdirSync(this.qrCodeDir, { recursive: true });
-            console.log("📁 QR code directory created.");
-        }
+    const fs = require("fs");
+    if (!fs.existsSync(this.qrCodeDir)) {
+        fs.mkdirSync(this.qrCodeDir, { recursive: true });
+        console.log("✅ QR Code directory created.");
     }
+}
 
     initializeCore() {
         console.log("🔄 Initializing WalletConnect Core...");

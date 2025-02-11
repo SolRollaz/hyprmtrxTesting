@@ -19,7 +19,7 @@ if (request.url === "/api/auth") {
 console.log("🔥 Upgrading connection to WebSocket...");
 server.on('upgrade', (request, socket, head) => {
 }
-});
+}
 
 // 🔥 Connect to MongoDB
 // Connect to MongoDB

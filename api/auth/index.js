@@ -1,18 +1,17 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
-import http from 'http';
-import { WebSocketServer } from 'ws';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import AuthEndpoint from './AuthEndpoint.js';
 
+// Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("✅ Current Working Directory:", process.cwd());
 
-// Create Express Router (Fix)
+// ✅ Create Express Router
 const router = express.Router();
 const authAPI = new AuthEndpoint();
 
@@ -39,7 +38,7 @@ const authLimiter = rateLimit({
 });
 
 // ✅ Register Routes
-router.post(['/auth', '/auth/'], authLimiter, async (req, res) => {
+router.post("/", authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
     } catch (e) {

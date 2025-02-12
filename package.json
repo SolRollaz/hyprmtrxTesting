@@ -1,4 +1,11 @@
-{"dependencies": {
+{
+"name": "metagraph_api",
+  "version": "1.0.0",
+  "main": "Server.js",
+  "directories": {
+    "test": "test"
+  },
+    "dependencies": {
 
     "@reown/appkit": "^1.6.2",
 

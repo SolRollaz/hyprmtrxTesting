@@ -93,11 +93,11 @@
 
   "version": "1.0.0",
 
-  "main": "index.js",
+  "main": "Server.js",
 
   "scripts": {
 
-    "start": "node ./api/auth/index.js",
+    "start": "node Server.js",
 
     "test": "echo \"Error: no test specified\" && exit 1"
 

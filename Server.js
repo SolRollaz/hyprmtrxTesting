@@ -1,4 +1,3 @@
-// Server.js - Fully Restored & Fixed
 import dotenv from 'dotenv';
 import express from 'express';
 import { MongoClient } from 'mongodb';

@@ -6,14 +6,10 @@ import { WebSocketServer } from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
-import helmet from 'helmet';
-import bodyParser from 'body-parser';
-import session from 'express-session';
-import authRoutes from "./index.js";
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
-console.log("✅ api/auth/index.js has been loaded!");
+
 console.log("Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("Current Working Directory:", process.cwd());
 
@@ -32,18 +28,9 @@ app.use(
     })
 );
 
-// Middleware
-app.use(bodyParser.json());
-app.use(helmet());
-app.use(
-    session({
-        name: 'siwe-session',
-        secret: 'siwe-quickstart-secret',
-        resave: true,
-        saveUninitialized: true,
-        cookie: { secure: false, sameSite: true },
-    })
-);
+// Middleware to parse JSON requests
+app.use(express.json());
+app.use(express.static("public"));
 
 // Initialize AuthEndpoint instance
 const authAPI = new AuthEndpoint();
@@ -58,7 +45,14 @@ const authLimiter = rateLimit({
 });
 
 // API Routes
-app.use("/api/auth", authRoutes);
+app.post('/api/auth', authLimiter, (req, res) => {
+    try {
+        authAPI.handleRequest(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/auth:", e);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 app.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
@@ -95,7 +89,7 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 // Start Server
-const PORT = process.env.PORT || 4000;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`🚀 Authentication API running at http://127.0.0.1:${PORT}/api/auth`);
     console.log(`🌐 Public access at https://hyprmtrx.xyz/api/auth`);

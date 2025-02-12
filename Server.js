@@ -1,3 +1,5 @@
+
+// Load dependencies
 import dotenv from 'dotenv';
 import express from 'express';
 import { MongoClient } from 'mongodb';
@@ -14,7 +16,6 @@ import {
 import { WebSocketServer } from 'ws';
 import http from 'http';
 import requestIp from 'request-ip';
-import authRoutes from "./api/auth/index.js";
 import AuthEndpoint from './api/auth/AuthEndpoint.js';
 
 // Load environment variables
@@ -29,51 +30,8 @@ const wss = new WebSocketServer({ noServer: true });
 const mongoUri = process.env.MONGO_URI;
 const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
 let db;
+
 const authEndpoint = new AuthEndpoint();
-
-// ✅ Fix: Allow requests from both hyprmtrx.com and hyprmtrx.xyz
-const allowedOrigins = ["https://hyprmtrx.com", "https://hyprmtrx.xyz"];
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin || allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error("Not allowed by CORS"));
-        }
-    },
-    methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization",
-    credentials: true
-}));
-app.options("*", (req, res) => {
-    res.header("Access-Control-Allow-Origin", req.headers.origin);
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.sendStatus(204);
-});
-
-// Middleware
-app.use(bodyParser.json());
-app.use(helmet());
-app.use(
-    session({
-        name: 'siwe-session',
-        secret: 'siwe-quickstart-secret',
-        resave: true,
-        saveUninitialized: true,
-        cookie: { secure: false, sameSite: true },
-    })
-);
-
-// ✅ Fix: Register API routes properly
-app.use("/api/auth", authRoutes);
-
-// API Routes
-app.get('/', (req, res) => {
-    res.header("Access-Control-Allow-Origin", req.headers.origin);
-    res.status(200).send('API is running successfully.');
-});
 
 // Handle WebSocket upgrades
 server.on('upgrade', (request, socket, head) => {
@@ -90,19 +48,34 @@ server.on('upgrade', (request, socket, head) => {
 // Connect to MongoDB
 async function connectToMongoDB() {
     try {
-        const client = new MongoClient(process.env.MONGO_URI, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true
-        });
-
+        const client = new MongoClient(mongoUri, { useUnifiedTopology: true });
         await client.connect();
-        console.log('✅ Successfully connected to Digital Ocean MongoDB');
-        db = client.db(process.env.MONGO_DB_NAME);
+        console.log('✅ Connected to MongoDB');
+        db = client.db(dbName);
     } catch (error) {
         console.error('❌ Failed to connect to MongoDB:', error);
         process.exit(1);
     }
 }
+
+// Express Middleware
+app.use(bodyParser.json());
+app.use(cors());
+app.use(helmet());
+
+app.use(
+    session({
+        name: 'siwe-session',
+        secret: 'siwe-quickstart-secret',
+        resave: true,
+        saveUninitialized: true,
+        cookie: { secure: false, sameSite: true },
+    })
+);
+
+// API Routes
+app.get('/', (req, res) => res.status(200).send('API is running successfully.'));
+app.post('/api/auth', (req, res) => authEndpoint.handleRequest(req, res));
 
 // WebSocket Handling
 wss.on("connection", (ws) => {
@@ -110,25 +83,10 @@ wss.on("connection", (ws) => {
 
     ws.on("message", async (message) => {
         try {
-            console.log("📩 Received WebSocket Message:", message);
             const { action } = JSON.parse(message);
 
             if (action === "authenticateUser") {
-                console.log("⚡ Generating QR Code...");
-
-                try {
-                    const qrCodeResult = await authEndpoint.generateQRCode();
-                    if (qrCodeResult.status !== "success") {
-                        console.error("❌ QR Code generation failed:", qrCodeResult.message);
-                        ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
-                        return;
-                    }
-                    console.log("✅ Sending QR Code:", qrCodeResult.qrCodeUrl);
-                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
-                } catch (error) {
-                    console.error("❌ Error generating QR Code:", error);
-                    ws.send(JSON.stringify({ error: "QR Code generation error" }));
-                }
+                console.log("⚡ WebSocket Authentication Request...");
                 await authEndpoint.handleWebSocketMessage(ws);
             }
         } catch (error) {

@@ -10,6 +10,8 @@ import rateLimit from 'express-rate-limit';
 
 // Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+console.log("✅ api/auth/index.js has been loaded!");
+
 
 console.log("Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("Current Working Directory:", process.cwd());

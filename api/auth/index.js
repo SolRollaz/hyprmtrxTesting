@@ -33,9 +33,9 @@ app.use(
 );
 
 // Middleware
-top.use(bodyParser.json());
-top.use(helmet());
-top.use(
+app.use(bodyParser.json());
+app.use(helmet());
+app.use(
     session({
         name: 'siwe-session',
         secret: 'siwe-quickstart-secret',

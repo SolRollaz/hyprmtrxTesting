@@ -1,3 +1,4 @@
+  GNU nano 8.1                                                                                                                                                                                                                                                                                                             package.json                                                                                                                                                                                                                                                                                                                      
 {
 
   "dependencies": {
@@ -38,6 +39,8 @@
 
     "express": "^4.21.2",
 
+    "express-rate-limit": "^7.5.0",
+
     "express-session": "^1.18.1",
 
     "helmet": "^8.0.0",
@@ -56,6 +59,8 @@
 
     "qrcode": "^1.5.4",
 
+    "request-ip": "^3.3.0",
+
     "siwe": "^2.3.2",
 
     "uuid": "^11.0.3",
@@ -66,7 +71,9 @@
 
     "walletconnect": "^1.7.8",
 
-    "web3": "^4.16.0"
+    "web3": "^4.16.0",
+
+    "ws": "^8.18.0"
 
   },
 
@@ -86,11 +93,11 @@
 
   "version": "1.0.0",
 
-  "main": "Server.js",
+  "main": "index.js",
 
   "scripts": {
 
-    "start": "node Server.js",
+    "start": "node ./api/auth/index.js",
 
     "test": "echo \"Error: no test specified\" && exit 1"
 
@@ -105,4 +112,3 @@
   "description": ""
 
 }
-

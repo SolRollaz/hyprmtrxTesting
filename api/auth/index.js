@@ -37,8 +37,8 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// ✅ Register Routes
-router.post("/", authLimiter, async (req, res) => {
+// ✅ Fix: Correctly handle `/api/auth`
+router.post(['/api/auth', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
     } catch (e) {
@@ -51,7 +51,7 @@ router.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
-router.get("/generate-qr", async (req, res) => {
+router.get("/api/generate-qr", async (req, res) => {
     try {
         await authAPI.handleQRCode(req, res);
     } catch (e) {
@@ -60,7 +60,7 @@ router.get("/generate-qr", async (req, res) => {
     }
 });
 
-router.post("/verify-signature", async (req, res) => {
+router.post("/api/verify-signature", async (req, res) => {
     try {
         await authAPI.handleVerifySignature(req, res);
     } catch (e) {

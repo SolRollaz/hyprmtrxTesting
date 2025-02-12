@@ -51,6 +51,10 @@ router.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
+router.get("/", (req, res) => {
+    res.status(200).json({ message: "Auth API is working!" });
+});
+
 router.get("/api/generate-qr", async (req, res) => {
     try {
         await authAPI.handleQRCode(req, res);

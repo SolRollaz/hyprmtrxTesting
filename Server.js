@@ -52,6 +52,7 @@ app.use(
 );
 
 // ✅ Mount API Routes (Delegating to `index.js`)
+console.log("✅ Registering auth routes at /api/auth");
 app.use("/api/auth", authRoutes);
 
 // ✅ Root Route

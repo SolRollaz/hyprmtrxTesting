@@ -31,15 +31,22 @@ const dbName = process.env.MONGO_DB_NAME || 'hyprmtrx';
 let db;
 const authEndpoint = new AuthEndpoint();
 
-// ✅ Ensure CORS is applied first
+// ✅ Fix: Allow requests from both hyprmtrx.com and hyprmtrx.xyz
+const allowedOrigins = ["https://hyprmtrx.com", "https://hyprmtrx.xyz"];
 app.use(cors({
-    origin: "https://hyprmtrx.com",
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("Not allowed by CORS"));
+        }
+    },
     methods: "GET,POST,PUT,DELETE,OPTIONS",
     allowedHeaders: "Content-Type,Authorization",
     credentials: true
 }));
 app.options("*", (req, res) => {
-    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    res.header("Access-Control-Allow-Origin", req.headers.origin);
     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.header("Access-Control-Allow-Credentials", "true");
@@ -64,7 +71,7 @@ app.use("/api/auth", authRoutes);
 
 // API Routes
 app.get('/', (req, res) => {
-    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    res.header("Access-Control-Allow-Origin", req.headers.origin);
     res.status(200).send('API is running successfully.');
 });
 

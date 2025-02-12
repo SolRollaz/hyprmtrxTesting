@@ -1,6 +1,4 @@
-                                                                                                                                                                                                                                                                                    package.json                                                                                                                                                                                                                                                                                                                  {
-
-  "dependencies": {
+{"dependencies": {
 
     "@reown/appkit": "^1.6.2",
 

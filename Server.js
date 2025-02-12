@@ -17,6 +17,7 @@ import { WebSocketServer } from 'ws';
 import http from 'http';
 import requestIp from 'request-ip';
 import AuthEndpoint from './api/auth/AuthEndpoint.js';
+import authRoutes from './api/auth/index.js';
 
 // Load environment variables
 dotenv.config();
@@ -72,7 +73,7 @@ app.use(
         cookie: { secure: false, sameSite: true },
     })
 );
-
+app.use("/api/auth", authRoutes); 
 // API Routes
 app.get('/', (req, res) => res.status(200).send('API is running successfully.'));
 app.post('/api/auth', (req, res) => authEndpoint.handleRequest(req, res));

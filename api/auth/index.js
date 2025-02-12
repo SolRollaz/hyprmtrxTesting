@@ -38,7 +38,7 @@ const authLimiter = rateLimit({
 });
 
 // ✅ Fix: Correctly handle `/api/auth`
-router.post(['/api/auth', '/api/auth/'], authLimiter, async (req, res) => {
+router.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
     } catch (e) {

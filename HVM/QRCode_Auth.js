@@ -18,6 +18,8 @@ class QR_Code_Auth {
     this.ensureQRCodeDirectory();
     this.signClient = null;
     this.activeSessions = new Map(); // Store active sessions
+    this.initializeSignClient();
+
   }
 
   ensureQRCodeDirectory() {
@@ -50,7 +52,6 @@ class QR_Code_Auth {
   async generateAuthenticationQRCode() {
     try {
       console.log("Starting QR code generation process...");
-      await this.initializeSignClient();
 
       const uniqueId = `${Date.now()}_${Math.random()
         .toString(36)
@@ -88,7 +89,7 @@ class QR_Code_Auth {
         const session = await approval()
         console.log("session : " + session);
         this.activeSessions.set(sessionId, session);
-
+        
         resolve();
       })
 

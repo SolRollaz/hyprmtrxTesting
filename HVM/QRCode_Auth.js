@@ -86,11 +86,21 @@ class QR_Code_Auth {
       });
 
       new Promise(async (resolve, reject)=>{
-        const session = await approval()
-        console.log("session : ", session);
-        // this.activeSessions.set(sessionId, session);
-        
-        resolve();
+        try{
+
+          const session = await approval()
+          console.log("session : ", session);
+          // this.activeSessions.set(sessionId, session);
+          
+          resolve();
+        }catch(e){
+          console.log(e)
+          reject();
+        }
+      }).then(()=>{
+        console.log("success session");
+      }).catch(()=>{
+        console.log("success failed");
       })
 
       console.log(

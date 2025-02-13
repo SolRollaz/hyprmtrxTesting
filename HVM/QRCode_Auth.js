@@ -34,14 +34,14 @@ class QR_Code_Auth {
 
     this.signClient = await SignClient.init({
       projectId: this.systemConfig.walletConnect.projectId,
-      relayUrl: this.systemConfig.walletConnect.relayUrl,
+      // relayUrl: this.systemConfig.walletConnect.relayUrl,
       metadata: {
         name: this.systemConfig.walletConnect.metadata.name || "Default App",
         description:
           this.systemConfig.walletConnect.metadata.description ||
           "Default Description",
-        url:
-          this.systemConfig.walletConnect.metadata.url || "https://example.com",
+        // url:
+          // this.systemConfig.walletConnect.metadata.url || "https://example.com",
         icons: this.systemConfig.walletConnect.metadata.icons || [
           "https://example.com/favicon.png",
         ],

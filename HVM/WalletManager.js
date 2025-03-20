@@ -1,4 +1,6 @@
 import { MongoClient } from "mongodb";
+import { ethers } from "ethers"; // Required for ETH-based wallets
+import dagWallet from "dag-wallet"; // DAG wallet generation
 import VaultHandler from "./VaultHandler.js";
 import AddUser from "./AddUser.js";
 import QRCodeManager from "./QRCodeManager.js";
@@ -10,7 +12,7 @@ class WalletManager {
         }
         this.systemConfig = systemConfig;
 
-        // Debug: Log the MongoDB configuration
+        // Debug: Log MongoDB configuration
         console.log("SystemConfig Mongo URI:", systemConfig.getMongoUri());
         console.log("SystemConfig Mongo DB Name:", systemConfig.getMongoDbName());
 
@@ -20,7 +22,7 @@ class WalletManager {
             throw new Error(`Invalid or undefined Mongo URI: ${mongoUri}`);
         }
 
-        // Initialize MongoDB client and other dependencies
+        // Initialize MongoDB client and dependencies
         this.dbClient = new MongoClient(mongoUri, { useUnifiedTopology: true });
         this.dbName = systemConfig.getMongoDbName();
         this.privateKeyCollection = "private_keys";
@@ -28,12 +30,12 @@ class WalletManager {
         this.addUser = new AddUser(systemConfig);
         this.qrCodeManager = new QRCodeManager();
 
-        // Attempt to connect to MongoDB
+        // Connect to MongoDB
         this.connectToDatabase();
     }
 
     /**
-     * Connect to the MongoDB database.
+     * Connect to MongoDB database.
      */
     async connectToDatabase() {
         try {
@@ -109,7 +111,6 @@ class WalletManager {
 
         await this.storePrivateKeys(userName, generatedWallets);
         await this.addUser.addNewUser(userName, generatedWallets, walletAddress);
-
         await this.qrCodeManager.generateQRCodeForWallets(userName, generatedWallets);
 
         return generatedWallets;
@@ -135,6 +136,60 @@ class WalletManager {
             }
             default:
                 throw new Error(`Unsupported network: ${network}`);
+        }
+    }
+
+    /**
+     * Retrieve encrypted private keys from MongoDB.
+     * @param {string} userName - User's name.
+     * @returns {Array} - List of decrypted wallets.
+     */
+    async retrievePrivateKeys(userName) {
+        try {
+            const db = this.dbClient.db(this.dbName);
+            const userData = await db.collection(this.privateKeyCollection).findOne({ userName });
+
+            if (!userData || !userData.wallets) {
+                console.warn(`No wallets found for user: ${userName}`);
+                return [];
+            }
+
+            // Decrypt wallets
+            return userData.wallets.map(wallet => ({
+                network: wallet.network,
+                address: wallet.address,
+                private_key: this.vaultHandler.decrypt(wallet.encryptedPrivateKey),
+            }));
+        } catch (error) {
+            console.error(`Error retrieving private keys for user: ${userName}`, error.message);
+            throw new Error("Failed to retrieve private keys.");
+        }
+    }
+
+    /**
+     * Update wallet address for a specific network.
+     * @param {string} userName - User's name.
+     * @param {string} network - Network name.
+     * @param {string} newAddress - New wallet address.
+     */
+    async updateWalletAddress(userName, network, newAddress) {
+        try {
+            const db = this.dbClient.db(this.dbName);
+
+            // Find user and update wallet address
+            const updateResult = await db.collection(this.privateKeyCollection).updateOne(
+                { userName, "wallets.network": network },
+                { $set: { "wallets.$.address": newAddress } }
+            );
+
+            if (updateResult.modifiedCount > 0) {
+                console.log(`Wallet address updated for network ${network} for user: ${userName}`);
+            } else {
+                console.warn(`No update performed for user: ${userName}, network: ${network}`);
+            }
+        } catch (error) {
+            console.error(`Error updating wallet address for user: ${userName}`, error.message);
+            throw new Error("Failed to update wallet address.");
         }
     }
 }

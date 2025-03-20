@@ -5,6 +5,8 @@ import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
+import MasterAuth from "../services/MasterAuth.js"; // ✅ Integrated authentication
+import WebSocket from "ws"; // Needed for WebSocket integration
 
 class AuthEndpoint {
     constructor() {
@@ -19,9 +21,13 @@ class AuthEndpoint {
         this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
+        this.masterAuth = new MasterAuth(); // ✅ Added authentication handling
         this.webSocketClients = new Map(); // Store WebSocket connections
     }
 
+    /**
+     * Handles an authentication request from the game.
+     */
     async handleRequest(req, res) {
         console.log("📩 Incoming Auth Request:", req.body);
 
@@ -37,6 +43,9 @@ class AuthEndpoint {
         }
     }
 
+    /**
+     * Generates and sends a QR code for authentication.
+     */
     async handleQRCodeRequest(res) {
         try {
             const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
@@ -66,6 +75,9 @@ class AuthEndpoint {
         }
     }
 
+    /**
+     * Handles WebSocket authentication flow.
+     */
     async handleWebSocketConnection(ws) {
         console.log("✅ WebSocket Client Connected");
         const clientId = Date.now().toString(); // Generate a unique client ID
@@ -86,6 +98,17 @@ class AuthEndpoint {
                     }
 
                     ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
+                } 
+                
+                else if (data.action === "verifyAuthentication") {
+                    console.log("⚡ Verifying Authentication...");
+                    const { walletAddress, signedMessage, authType, gameName, userName } = data;
+
+                    // ✅ Call MasterAuth for authentication
+                    const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName);
+
+                    // ✅ Send authentication result to the game
+                    this.sendAuthResponseToGame(ws, authResult);
                 }
             } catch (error) {
                 console.error("❌ Error processing WebSocket message:", error);
@@ -103,9 +126,31 @@ class AuthEndpoint {
         });
     }
 
+    /**
+     * Sends authentication response back to the game.
+     */
+    sendAuthResponseToGame(ws, authResult) {
+        try {
+            const responsePayload = {
+                status: authResult.status,
+                message: authResult.message,
+                userName: authResult.userName || null,
+                token: authResult.token || null,
+            };
+
+            ws.send(JSON.stringify(responsePayload));
+            console.log("✅ Sent authentication response to game:", responsePayload);
+        } catch (error) {
+            console.error("❌ Error sending authentication response to game:", error.message);
+        }
+    }
+
+    /**
+     * Sends JWT to authenticated WebSocket client.
+     */
     async sendJWTToClient(sessionId, token) {
         for (const [clientId, ws] of this.webSocketClients) {
-            if (ws.readyState === ws.OPEN) {
+            if (ws.readyState === WebSocket.OPEN) {
                 console.log("✅ Sending JWT to client:", clientId);
                 ws.send(JSON.stringify({ token }));
                 ws.close(); // Close connection after sending JWT

@@ -59,7 +59,8 @@ const userSchema = new mongoose.Schema({
     account_created_from: { type: String, enum: ["web", "mobile", "API", "network"], default: "web" },
     referral_code: { type: String, default: null },
 
-    transaction_history: { 
+    // ✅ Renamed transaction history to WEB3_transaction_history
+    WEB3_transaction_history: {  
         type: [{
             type: { type: String, enum: ["deposit", "withdrawal", "NFT_purchase"], required: true },
             amount: { type: Number, required: true },
@@ -68,22 +69,43 @@ const userSchema = new mongoose.Schema({
             timestamp: { type: Date, default: Date.now }
         }],
         default: []
-    }, 
+    },
+
+    // ✅ Added HPMX transaction history
+    HPMX_transaction_history: {  
+        type: [{
+            type: { type: String, enum: ["deposit", "withdrawal", "NFT_purchase"], required: true },
+            amount: { type: Number, required: true },
+            currency: { type: String, required: true },
+            transaction_id: { type: String, required: true, unique: true },
+            timestamp: { type: Date, default: Date.now }
+        }],
+        default: []
+    },
 
     developer_mode: { type: Boolean, default: false },
 
     // ✅ New Section: Owned NFTs
     owned_nfts: {
         type: [{
-            contract_address: { type: String, required: true }, // Smart contract address of NFT
-            token_id: { type: String, required: true }, // Unique Token ID
-            network: { type: String, required: true }, // Blockchain network (ETH, BNB, AVAX, etc.)
-            metadata_uri: { type: String, default: null }, // Optional metadata link (IPFS, API, etc.)
-            image_url: { type: String, default: null }, // Image URL of NFT
-            name: { type: String, default: null }, // NFT Name
-            description: { type: String, default: null }, // NFT Description
-            verified_ownership: { type: Boolean, default: false }, // Verified if user actually owns the NFT
-            acquired_at: { type: Date, default: Date.now } // Date the NFT was added
+            contract_address: { type: String, required: true }, 
+            token_id: { type: String, required: true }, 
+            network: { type: String, required: true }, 
+            metadata_uri: { type: String, default: null }, 
+            image_url: { type: String, default: null }, 
+            name: { type: String, default: null }, 
+            description: { type: String, default: null }, 
+            verified_ownership: { type: Boolean, default: false }, 
+            acquired_at: { type: Date, default: Date.now } 
+        }],
+        default: []
+    },
+
+    // ✅ Added HPMX Network Balances (stores token contract address & balance)
+    HPMX_network_balances: {
+        type: [{
+            token_contract_address: { type: String, required: true }, // Contract address of the token
+            balance: { type: Number, required: true } // User's balance of this token
         }],
         default: []
     },
@@ -104,6 +126,45 @@ userSchema.methods.addNFT = function (nft) {
         verified_ownership: nft.verified_ownership || false,
         acquired_at: new Date()
     });
+
+    return this.save();
+};
+
+// ✅ Method to add a transaction to WEB3 history
+userSchema.methods.addWeb3Transaction = function (transaction) {
+    this.WEB3_transaction_history.push({
+        type: transaction.type,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        transaction_id: transaction.transaction_id,
+        timestamp: new Date()
+    });
+
+    return this.save();
+};
+
+// ✅ Method to add a transaction to HPMX history
+userSchema.methods.addHPMXTransaction = function (transaction) {
+    this.HPMX_transaction_history.push({
+        type: transaction.type,
+        amount: transaction.amount,
+        currency: transaction.currency,
+        transaction_id: transaction.transaction_id,
+        timestamp: new Date()
+    });
+
+    return this.save();
+};
+
+// ✅ Method to update HPMX Network Balance
+userSchema.methods.updateHPMXBalance = function (token_contract_address, balance) {
+    const existingToken = this.HPMX_network_balances.find(token => token.token_contract_address === token_contract_address);
+
+    if (existingToken) {
+        existingToken.balance = balance; // ✅ Update balance if token exists
+    } else {
+        this.HPMX_network_balances.push({ token_contract_address, balance }); // ✅ Add new token entry
+    }
 
     return this.save();
 };

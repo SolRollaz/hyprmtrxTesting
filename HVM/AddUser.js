@@ -1,87 +1,48 @@
-import mongoose from "mongoose";
-import User from "../Schema/userSchema.js"; // Include the `.js` extension for the schema
-const mongoUri = process.env.MONGO_URI; // Environment variable for MongoDB URI
+import User from "../models/User.js";
+import WalletManager from "../services/WalletManager.js";
 
 class AddUser {
-    constructor(systemConfig) {
-        this.systemConfig = systemConfig;
-        if (!mongoUri) {
-            throw new Error("MongoDB URI is not defined. Ensure MONGO_URI is set in the environment variables.");
-        }
-    }
-
-    /**
-     * This method adds a new user and creates a dynamic collection based on the username.
-     * @param {string} user_name - The user name of the new user.
-     * @param {Array} generatedWallets - List of wallets for the user.
-     * @param {string} wallet_address - The main wallet address of the user.
-     * @returns {Promise<void>}
-     */
-    async addNewUser(user_name, generatedWallets, wallet_address) {
+    static async createNewUser(walletAddress, userName) {
         try {
-            // Validate username to prevent illegal collection names
-            if (!user_name || typeof user_name !== "string") {
-                throw new Error("Invalid username. Username must be a non-empty string.");
-            }
-            const sanitizedUserName = user_name.toLowerCase().replace(/[^a-z0-9_]/g, "_");
+            // ✅ Step 1: Generate blockchain wallets
+            const generatedWallets = await WalletManager.generateWallets(walletAddress);
 
-            // Dynamically create a collection based on the user_name
-            const userCollectionName = `user_${sanitizedUserName}`;
-            const userSchema = new mongoose.Schema({
-                user_name: { type: String, required: true, unique: true },
+            if (!generatedWallets) {
+                console.error("Failed to generate wallets for new user.");
+                return null;
+            }
+
+            // ✅ Step 2: Create new user entry
+            const newUser = new User({
+                user_name: userName,
                 auth_wallets: {
-                    DAG: { type: String, required: true },
-                    AVAX: { type: String, required: true },
-                    BNB: { type: String, required: true },
-                    ETH: { type: String, required: true },
+                    ETH: walletAddress,
+                    DAG: generatedWallets.DAG,
+                    AVAX: generatedWallets.AVAX,
+                    BNB: generatedWallets.BNB
                 },
                 hyprmtrx_wallets: [
-                    {
-                        network: { type: String, required: true },
-                        address: { type: String, required: true },
-                    },
+                    { network: "DAG", address: generatedWallets.DAG },
+                    { network: "AVAX", address: generatedWallets.AVAX },
+                    { network: "BNB", address: generatedWallets.BNB },
+                    { network: "ETH", address: walletAddress }
                 ],
-                created_at: { type: Date, default: Date.now },
+                WEB3_transaction_history: [],
+                HPMX_transaction_history: [],
+                owned_nfts: [],
+                HPMX_network_balances: [],
+                account_status: "active",
+                created_at: new Date()
             });
 
-            // Create the model dynamically based on the collection name
-            const DynamicUserModel =
-                mongoose.models[userCollectionName] || // Reuse existing model if already created
-                mongoose.model(userCollectionName, userSchema);
+            // ✅ Step 3: Save new user to database
+            await newUser.save();
+            console.log(`New user created: ${userName}`);
 
-            // Extract wallet addresses for the user
-            const authWallets = {
-                DAG: generatedWallets.find(w => w.network === "DAG")?.address || "",
-                AVAX: generatedWallets.find(w => w.network === "AVAX")?.address || "",
-                BNB: generatedWallets.find(w => w.network === "BNB")?.address || "",
-                ETH: generatedWallets.find(w => w.network === "ETH")?.address || "",
-            };
-
-            // Ensure all required wallets are provided
-            if (Object.values(authWallets).some(wallet => !wallet)) {
-                throw new Error("Missing wallet addresses for required networks (DAG, AVAX, BNB, ETH).");
-            }
-
-            // Create the new user data object
-            const user = new DynamicUserModel({
-                user_name,
-                auth_wallets: authWallets,
-                hyprmtrx_wallets: generatedWallets.map(wallet => ({
-                    network: wallet.network,
-                    address: wallet.address,
-                })),
-            });
-
-            // Save the new user to the database in the dynamically created collection
-            await user.save();
-            console.log("New user added to collection:", user_name);
+            return newUser;
         } catch (error) {
-            console.error("Error adding user:", {
-                message: error.message,
-                user_name,
-                generatedWallets,
-            });
-            throw new Error("Failed to add user.");
+            console.error("Error creating new user:", error.message);
+            return null;
         }
     }
 }

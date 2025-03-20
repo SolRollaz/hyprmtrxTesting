@@ -1,62 +1,59 @@
-import AuthValidator from "./AuthValidator.js";
-import JWTManager from "./JWTManager.js";
-import SystemConfig from "../systemConfig.js";
+import User from "../models/User.js"; 
+import AddUser from "../services/AddUser.js"; 
+import JWTManager from "../services/JWTManager.js";
+import AuthValidator from "../services/AuthValidator.js";
 
 class MasterAuth {
-    constructor(client, dbName, systemConfig) {
-        if (!client || !dbName || !systemConfig) {
-            throw new Error("MongoClient, database name, and SystemConfig are required to initialize MasterAuth.");
-        }
-
-        this.client = client;
-        this.dbName = dbName;
-        this.systemConfig = systemConfig;
-
+    constructor() {
         this.authValidator = new AuthValidator();
-        this.jwtManager = new JWTManager(this.client, this.dbName);
+        this.jwtManager = new JWTManager();
     }
 
-    /**
-     * Generate an authentication message for the user to sign.
-     * @param {string} walletAddress - The wallet address.
-     * @returns {string} - The message to be signed.
-     */
+    // ✅ Generates the authentication message for signing
     generateAuthMessage(walletAddress) {
-        const timestamp = Date.now();
-        return `Sign this message to authenticate with HyperMatrix: ${walletAddress} - ${timestamp}`;
+        return `Sign this message to authenticate with your wallet: ${walletAddress}`;
     }
 
-    /**
-     * Verify the signed message from the user's wallet.
-     * @param {string} walletAddress - The wallet address.
-     * @param {string} signedMessage - The signed message from the wallet.
-     * @param {string} authType - The authentication type.
-     * @param {string} gameName - The game name.
-     * @param {string} userName - The user's name.
-     * @returns {object} - The verification result.
-     */
-    async verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName) {
-        try {
-            const message = this.generateAuthMessage(walletAddress);
-            console.log(`Verifying signed message for wallet: ${walletAddress}`);
+    // ✅ Verifies signed authentication message & handles user creation if necessary
+    async verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName) { 
+        try { 
+            const message = this.generateAuthMessage(walletAddress); 
+            console.log(`Verifying signed message for wallet: ${walletAddress}`); 
 
-            const isAuthenticated = await this.authValidator.validateWallet(authType, walletAddress, signedMessage, message);
-            if (!isAuthenticated) {
-                return { status: "failure", message: "Wallet authentication failed. Please try again." };
-            }
+            // ✅ Step 1: Verify wallet authentication
+            const isAuthenticated = await this.authValidator.validateWallet(authType, walletAddress, signedMessage, message); 
 
-            const token = await this.jwtManager.generateToken(userName, walletAddress, gameName);
-            console.log("Wallet successfully authenticated and token generated:", token);
+            if (!isAuthenticated) { 
+                return { status: "failure", message: "Wallet authentication failed. Please try again." }; 
+            } 
 
-            return {
-                status: "success",
-                message: "Wallet successfully authenticated.",
-                token,
-            };
-        } catch (error) {
-            console.error("Error verifying signed message:", error.message);
-            return { status: "failure", message: "Internal server error during authentication." };
-        }
+            // ✅ Step 2: Check if user exists in the database
+            let existingUser = await User.findOne({ "auth_wallets.ETH": walletAddress });
+
+            if (!existingUser) { 
+                console.log(`User with wallet ${walletAddress} does not exist. Creating new user...`);
+
+                // ✅ Step 3: Create the user
+                existingUser = await AddUser.createNewUser(walletAddress, userName);
+
+                if (!existingUser) {
+                    return { status: "failure", message: "User creation failed." };
+                }
+            } 
+
+            // ✅ Step 4: Generate JWT token for the user
+            const token = await this.jwtManager.generateToken(existingUser.user_name, walletAddress, gameName); 
+            console.log("Wallet successfully authenticated and token generated:", token); 
+
+            return { 
+                status: "success", 
+                message: "Wallet successfully authenticated and user created (if necessary).", 
+                token, 
+            }; 
+        } catch (error) { 
+            console.error("Error verifying signed message:", error.message); 
+            return { status: "failure", message: "Internal server error during authentication." }; 
+        } 
     }
 }
 

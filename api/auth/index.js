@@ -4,8 +4,9 @@ import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import AuthEndpoint from './AuthEndpoint.js';
+import { validateApiKey, isDomainWhitelisted } from './middleware/authMiddleware.js';
 
-// Load environment variables
+// ✅ Load environment variables
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
@@ -19,7 +20,7 @@ const authAPI = new AuthEndpoint();
 const corsOptions = {
     origin: "https://hyprmtrx.com",
     methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization",
+    allowedHeaders: "Content-Type,Authorization,x-api-key",
     credentials: true,
 };
 router.use(cors(corsOptions));
@@ -35,6 +36,29 @@ const authLimiter = rateLimit({
     message: { status: "failure", message: "Too many authentication attempts. Try again later." },
     standardHeaders: true,
     legacyHeaders: false,
+});
+
+/**
+ * ✅ Middleware to enforce domain-based or API key-based authentication.
+ */
+router.use((req, res, next) => {
+    const origin = req.get("Origin"); // Get domain from request
+    const apiKey = req.get("x-api-key"); // Get API key from request headers
+
+    // ✅ Step 1: Allow if the domain is whitelisted (no API key required)
+    if (isDomainWhitelisted(origin)) {
+        console.log(`✅ Allowed: Whitelisted domain ${origin}`);
+        return next();
+    }
+
+    // ✅ Step 2: If the request is NOT from a whitelisted domain, require an API key
+    if (!apiKey || !validateApiKey(apiKey)) {
+        console.warn(`❌ Forbidden: Unauthorized request from ${origin || "unknown source"}`);
+        return res.status(403).json({ status: "failure", message: "Access denied. Invalid API key or unregistered domain." });
+    }
+
+    console.log(`✅ Allowed: Valid API key authentication from ${origin || "API Client"}`);
+    next();
 });
 
 // ✅ Fix: Correctly handle `/api/auth`

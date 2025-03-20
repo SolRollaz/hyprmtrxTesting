@@ -1,7 +1,14 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
-    user_name: { type: String, required: true, unique: true },
+    user_name: { 
+        type: String, 
+        required: true, 
+        unique: true, 
+        trim: true, // ✅ Remove extra spaces
+        lowercase: true, // ✅ Enforce lowercase
+        index: true // ✅ Index for faster lookups
+    },
 
     auth_wallets: { 
         type: {
@@ -111,6 +118,12 @@ const userSchema = new mongoose.Schema({
     },
 
     created_at: { type: Date, default: Date.now }
+});
+
+// ✅ Ensure `user_name` is stored in lowercase (extra safeguard)
+userSchema.pre("save", function (next) {
+    this.user_name = this.user_name.toLowerCase();
+    next();
 });
 
 // ✅ Method to add an NFT to the user's collection

@@ -7,6 +7,7 @@ import fs from "fs";
 import path from "path";
 import MasterAuth from "../../HVM/MasterAuth.js";
 import WebSocket from "ws";
+import CheckUserName from "./CheckUserName.js";
 
 class AuthEndpoint {
     constructor() {
@@ -34,6 +35,7 @@ class AuthEndpoint {
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
         this.masterAuth = new MasterAuth();
+        this.checkUserName = new CheckUserName(this.client);
         this.webSocketClients = new Map();
     }
 
@@ -105,6 +107,9 @@ class AuthEndpoint {
                     const { walletAddress, signedMessage, authType, gameName, userName } = data;
                     const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName);
                     this.sendAuthResponseToGame(ws, authResult);
+                } else if (data.action === "checkUserName") {
+                    console.log("🔎 Checking user name...");
+                    await this.checkUserName.handle(ws, data.userName);
                 }
             } catch (error) {
                 console.error("❌ Error processing WebSocket message:", error);

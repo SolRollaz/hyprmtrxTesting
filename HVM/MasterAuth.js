@@ -1,7 +1,7 @@
-import User from "../models/User.js"; 
-import AddUser from "../services/AddUser.js"; 
-import JWTManager from "../services/JWTManager.js";
-import AuthValidator from "../services/AuthValidator.js";
+import User from "../Schema/userSchema.js";  // Correct path for the User model
+import AddUser from "../HVM/AddUser.js";  // Correct path for AddUser
+import JWTManager from "../HVM/JWTManager.js";  // Correct path for JWTManager
+import AuthValidator from "../HVM/AuthValidator.js";  // Correct path for AuthValidator
 
 class MasterAuth {
     constructor() {

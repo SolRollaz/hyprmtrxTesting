@@ -1,0 +1,20 @@
+import mongoose from "mongoose";
+
+const mimSchema = new mongoose.Schema({
+  game_id: { type: String, required: true, index: true },
+  MIM_ID: { type: String, required: true, unique: true },
+  Creator_ID: { type: String, required: true },
+  Image_URL: { type: String, default: "" },
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  created_at: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+const MIM = mongoose.model("MIM", mimSchema);
+
+export default MIM;

@@ -2,19 +2,19 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
-import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import WebSocket from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
 
-// Setup __dirname for ES modules
+// Setup __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env
+// Load env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
+
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("✅ Current Working Directory:", process.cwd());
 
@@ -22,25 +22,28 @@ const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 3000;
 
-// Init Auth Handler
+// Init Mongo + QR
 const authAPI = new AuthEndpoint();
 
-// ✅ CORS Fix (Allow hyprmtrx.com)
-const corsOptions = {
-    origin: 'https://hyprmtrx.com',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-    optionsSuccessStatus: 204
-};
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // 🔥 FIXES preflight
+// ✅ HARDCODED CORS FIX (DO NOT REMOVE)
+app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
+
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(204);
+    }
+
+    next();
+});
 
 // ✅ Middleware
 app.use(express.json());
 app.use(express.static("public"));
 
-// ✅ Rate Limiter
+// ✅ Rate Limiting
 const authLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 5,
@@ -69,7 +72,7 @@ app.get("/", (req, res) => {
 
 app.get("/api/generate-qr", async (req, res) => {
     try {
-        await authAPI.handleQRCode(req, res);
+        await authAPI.handleQRCodeRequest(res);
     } catch (e) {
         console.error("❌ API Error in /api/generate-qr:", e);
         res.status(500).json({ error: e.message });
@@ -85,7 +88,7 @@ app.post("/api/verify-signature", async (req, res) => {
     }
 });
 
-// ✅ WebSocket Integration
+// ✅ WebSocket integration
 const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
     authAPI.handleWebSocketConnection(ws);

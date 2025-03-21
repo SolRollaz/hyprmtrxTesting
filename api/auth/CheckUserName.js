@@ -1,7 +1,9 @@
-import User from "../Schema/userSchema.js"; // ✅ User schema
-import R18Check from "../../HVM/R18Check.js"; // ✅ R18 name filter
-import AddUser from "../../HVM/AddUser.js"; // ✅ User creation
-import JWTManager from "../../HVM/JWTManager.js"; // ✅ Token generation
+// File: /api/auth/CheckUserName.js
+
+import User from "../Schema/userSchema.js";
+import R18Check from "../../HVM/R18Check.js";
+import AddUser from "../../HVM/AddUser.js";
+import JWTManager from "../../HVM/JWTManager.js";
 
 class CheckUserName {
     constructor(dbClient) {
@@ -19,7 +21,6 @@ class CheckUserName {
         try {
             const normalizedUserName = userName.trim().toLowerCase();
 
-            // ✅ Check valid characters
             if (!/^[a-zA-Z0-9\-_]+$/.test(normalizedUserName)) {
                 return ws.send(JSON.stringify({
                     status: "failure",
@@ -27,7 +28,6 @@ class CheckUserName {
                 }));
             }
 
-            // ✅ Check if user name already exists
             const nameExists = await User.findOne({ user_name: normalizedUserName });
             if (nameExists) {
                 return ws.send(JSON.stringify({
@@ -36,7 +36,6 @@ class CheckUserName {
                 }));
             }
 
-            // ✅ R18 profanity check
             const isClean = await R18Check.isAllowed(normalizedUserName);
             if (!isClean) {
                 return ws.send(JSON.stringify({
@@ -45,7 +44,6 @@ class CheckUserName {
                 }));
             }
 
-            // ✅ Create user now that name is accepted
             const newUser = await AddUser.createNewUser(walletAddress, normalizedUserName);
             if (!newUser) {
                 return ws.send(JSON.stringify({
@@ -54,11 +52,10 @@ class CheckUserName {
                 }));
             }
 
-            // ✅ Generate JWT token
             const token = await this.jwtManager.generateToken(
                 newUser.user_name,
-                walletAddress,
-                "hyprmtrx" // hardcoded game name (or pass in param if needed)
+                walletAddress
+                // gameName omitted until dynamic support added
             );
 
             return ws.send(JSON.stringify({

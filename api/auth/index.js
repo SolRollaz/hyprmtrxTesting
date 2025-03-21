@@ -1,68 +1,54 @@
+// index.js
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import http from 'http';
+import { fileURLToPath } from 'url';
 import AuthEndpoint from './AuthEndpoint.js';
-import { validateApiKey, isDomainWhitelisted } from './middleware/authMiddleware.js';
 
-// ✅ Load environment variables
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+// Get __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load environment variables
+dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("✅ Current Working Directory:", process.cwd());
 
-// ✅ Create Express Router
-const router = express.Router();
+const app = express();
+const server = http.createServer(app);
+const port = process.env.PORT || 3000;
+
+// INIT CORE
 const authAPI = new AuthEndpoint();
 
-// ✅ CORS Configuration
+// CORS config
 const corsOptions = {
     origin: "https://hyprmtrx.com",
     methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization,x-api-key",
+    allowedHeaders: "Content-Type,Authorization",
     credentials: true,
 };
-router.use(cors(corsOptions));
+app.use(cors(corsOptions));
 
-// ✅ Middleware
-router.use(express.json());
-router.use(express.static("public"));
+// Middleware
+app.use(express.json());
+app.use(express.static("public"));
 
-// ✅ Rate Limiting
+// Rate Limiter
 const authLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000, // 1 minute
+    windowMs: 1 * 60 * 1000,
     max: 5,
     message: { status: "failure", message: "Too many authentication attempts. Try again later." },
     standardHeaders: true,
     legacyHeaders: false,
 });
 
-/**
- * ✅ Middleware to enforce domain-based or API key-based authentication.
- */
-router.use((req, res, next) => {
-    const origin = req.get("Origin"); // Get domain from request
-    const apiKey = req.get("x-api-key"); // Get API key from request headers
-
-    // ✅ Step 1: Allow if the domain is whitelisted (no API key required)
-    if (isDomainWhitelisted(origin)) {
-        console.log(`✅ Allowed: Whitelisted domain ${origin}`);
-        return next();
-    }
-
-    // ✅ Step 2: If the request is NOT from a whitelisted domain, require an API key
-    if (!apiKey || !validateApiKey(apiKey)) {
-        console.warn(`❌ Forbidden: Unauthorized request from ${origin || "unknown source"}`);
-        return res.status(403).json({ status: "failure", message: "Access denied. Invalid API key or unregistered domain." });
-    }
-
-    console.log(`✅ Allowed: Valid API key authentication from ${origin || "API Client"}`);
-    next();
-});
-
-// ✅ Fix: Correctly handle `/api/auth`
-router.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
+// Routes
+app.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
     } catch (e) {
@@ -71,15 +57,15 @@ router.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     }
 });
 
-router.get("/.well-known/walletconnect.txt", (req, res) => {
+app.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
-router.get("/", (req, res) => {
+app.get("/", (req, res) => {
     res.status(200).json({ message: "Auth API is working!" });
 });
 
-router.get("/api/generate-qr", async (req, res) => {
+app.get("/api/generate-qr", async (req, res) => {
     try {
         await authAPI.handleQRCode(req, res);
     } catch (e) {
@@ -88,7 +74,7 @@ router.get("/api/generate-qr", async (req, res) => {
     }
 });
 
-router.post("/api/verify-signature", async (req, res) => {
+app.post("/api/verify-signature", async (req, res) => {
     try {
         await authAPI.handleVerifySignature(req, res);
     } catch (e) {
@@ -97,5 +83,14 @@ router.post("/api/verify-signature", async (req, res) => {
     }
 });
 
-// ✅ Export the router
-export default router;
+// WebSocket setup
+import WebSocket from 'ws';
+const wss = new WebSocket.Server({ server });
+wss.on('connection', (ws) => {
+    authAPI.handleWebSocketConnection(ws);
+});
+
+// Start
+server.listen(port, () => {
+    console.log(`🚀 Hyprmtrx Auth API running on http://localhost:${port}`);
+});

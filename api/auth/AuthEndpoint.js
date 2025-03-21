@@ -1,3 +1,5 @@
+// File: /api/auth/AuthEndpoint.js
+
 import express from "express";
 import QR_Code_Auth from "../../HVM/QRCode_Auth.js";
 import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
@@ -106,10 +108,20 @@ class AuthEndpoint {
                     console.log("⚡ Verifying Authentication...");
                     const { walletAddress, signedMessage, authType, gameName, userName } = data;
                     const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName);
+
+                    if (authResult.status === "awaiting_username") {
+                        return ws.send(JSON.stringify({
+                            status: "awaiting_username",
+                            message: authResult.message,
+                            walletAddress: authResult.walletAddress
+                        }));
+                    }
+
                     this.sendAuthResponseToGame(ws, authResult);
                 } else if (data.action === "checkUserName") {
                     console.log("🔎 Checking user name...");
-                    await this.checkUserName.handle(ws, data.userName);
+                    const { walletAddress, userName } = data;
+                    await this.checkUserName.handle(ws, walletAddress, userName);
                 }
             } catch (error) {
                 console.error("❌ Error processing WebSocket message:", error);

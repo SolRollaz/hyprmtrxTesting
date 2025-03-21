@@ -20,12 +20,11 @@ console.log("✅ Current Working Directory:", process.cwd());
 
 const app = express();
 const server = http.createServer(app);
-const port = process.env.PORT || 3000;
+const port = 3000; // Force it to match NGINX proxy_pass
 
-// Init Mongo + QR
 const authAPI = new AuthEndpoint();
 
-// ✅ HARDCODED CORS FIX (DO NOT REMOVE)
+// ✅ HARDCODED CORS FIX
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
     res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
@@ -52,7 +51,7 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// ✅ API Routes
+// ✅ Routes
 app.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
@@ -88,7 +87,7 @@ app.post("/api/verify-signature", async (req, res) => {
     }
 });
 
-// ✅ WebSocket integration
+// ✅ WebSocket support
 const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
     authAPI.handleWebSocketConnection(ws);

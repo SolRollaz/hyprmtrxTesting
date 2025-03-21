@@ -6,15 +6,15 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import http from 'http';
 import { fileURLToPath } from 'url';
+import WebSocket from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
 
-// Get __dirname
+// Setup __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load .env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
-
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
 console.log("✅ Current Working Directory:", process.cwd());
 
@@ -22,23 +22,25 @@ const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 3000;
 
-// INIT CORE
+// Init Auth Handler
 const authAPI = new AuthEndpoint();
 
-// CORS config
+// ✅ CORS Fix (Allow hyprmtrx.com)
 const corsOptions = {
-    origin: "https://hyprmtrx.com",
-    methods: "GET,POST,PUT,DELETE,OPTIONS",
-    allowedHeaders: "Content-Type,Authorization",
+    origin: 'https://hyprmtrx.com',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
+    optionsSuccessStatus: 204
 };
 app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // 🔥 FIXES preflight
 
-// Middleware
+// ✅ Middleware
 app.use(express.json());
 app.use(express.static("public"));
 
-// Rate Limiter
+// ✅ Rate Limiter
 const authLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 5,
@@ -47,7 +49,7 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Routes
+// ✅ API Routes
 app.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
@@ -83,14 +85,13 @@ app.post("/api/verify-signature", async (req, res) => {
     }
 });
 
-// WebSocket setup
-import WebSocket from 'ws';
+// ✅ WebSocket Integration
 const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
     authAPI.handleWebSocketConnection(ws);
 });
 
-// Start
+// ✅ Start server
 server.listen(port, () => {
-    console.log(`🚀 Hyprmtrx Auth API running on http://localhost:${port}`);
+    console.log(`🚀 Auth API running on http://localhost:${port}`);
 });

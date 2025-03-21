@@ -1,0 +1,25 @@
+import mongoose from "mongoose";
+
+const dialogueEntrySchema = new mongoose.Schema({
+  timestamp: { type: Date, default: Date.now },
+  sender: { type: String, enum: ["player", "agent"], required: true },
+  message: { type: String, required: true }
+}, { _id: false });
+
+const aiAgentSchema = new mongoose.Schema({
+  game_id: { type: String, required: true, index: true },
+  agent_name: { type: String, required: true },
+  player_wallet: { type: String, required: true, index: true },
+
+  persona: {
+    role: { type: String, default: "" },               // e.g. healer, merchant
+    system_prompt: { type: String, default: "" },       // Full LLM prompt config
+    mood: { type: String, default: "neutral" },         // Optional emotional flavor
+  },
+
+  memory: { type: [String], default: [] },              // Long-term memory phrases
+  dialogue_history: { type: [dialogueEntrySchema], default: [] } // Chat log
+}, { timestamps: true });
+
+const AiAgent = mongoose.model("AiAgent", aiAgentSchema);
+export default AiAgent;

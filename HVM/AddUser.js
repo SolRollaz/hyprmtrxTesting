@@ -1,5 +1,5 @@
-import User from "../models/User.js";
-import WalletManager from "../services/WalletManager.js";
+import User from "../Schema/userSchema.js";  // Correct path for the User model
+import WalletManager from "../HVM/WalletManager.js";  // Correct path for WalletManager
 
 class AddUser {
     static async createNewUser(walletAddress, userName) {

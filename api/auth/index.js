@@ -20,7 +20,7 @@ console.log("✅ Current Working Directory:", process.cwd());
 
 const app = express();
 const server = http.createServer(app);
-const port = 3000; // Force it to match NGINX proxy_pass
+const port = 3000;
 
 const authAPI = new AuthEndpoint();
 
@@ -84,6 +84,25 @@ app.post("/api/verify-signature", async (req, res) => {
     } catch (e) {
         console.error("❌ API Error in /api/verify-signature:", e);
         res.status(500).json({ error: e.message });
+    }
+});
+
+// ✅ New REST fallback for username registration
+app.post("/api/check-username", async (req, res) => {
+    try {
+        const { walletAddress, userName } = req.body;
+
+        if (!walletAddress || !userName) {
+            return res.status(400).json({
+                status: "failure",
+                message: "Missing walletAddress or userName"
+            });
+        }
+
+        await authAPI.checkUserName.handleREST(req, res);
+    } catch (e) {
+        console.error("❌ API Error in /api/check-username:", e);
+        res.status(500).json({ status: "failure", message: "Server error" });
     }
 });
 

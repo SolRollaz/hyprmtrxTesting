@@ -5,8 +5,8 @@ import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
-import MasterAuth from "../services/MasterAuth.js"; // ✅ Integrated authentication
-import WebSocket from "ws"; // Needed for WebSocket integration
+import MasterAuth from "../services/MasterAuth.js";
+import WebSocket from "ws";
 
 class AuthEndpoint {
     constructor() {
@@ -18,16 +18,25 @@ class AuthEndpoint {
             throw new Error("❌ Mongo URI or DB Name is not defined.");
         }
 
-        this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
+        this.client = new MongoClient(this.mongoUri, {
+            useUnifiedTopology: true,
+            connectTimeoutMS: 10000,
+            serverSelectionTimeoutMS: 10000,
+        });
+
+        this.client.connect()
+            .then(() => console.log("✅ MongoDB connected successfully"))
+            .catch((err) => {
+                console.error("❌ MongoDB connection failed:", err.message);
+                process.exit(1);
+            });
+
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
-        this.masterAuth = new MasterAuth(); // ✅ Added authentication handling
-        this.webSocketClients = new Map(); // Store WebSocket connections
+        this.masterAuth = new MasterAuth();
+        this.webSocketClients = new Map();
     }
 
-    /**
-     * Handles an authentication request from the game.
-     */
     async handleRequest(req, res) {
         console.log("📩 Incoming Auth Request:", req.body);
 
@@ -43,9 +52,6 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * Generates and sends a QR code for authentication.
-     */
     async handleQRCodeRequest(res) {
         try {
             const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
@@ -63,7 +69,6 @@ class AuthEndpoint {
             }
 
             console.log(`✅ Streaming QR Code from path: ${qrCodePath}`);
-
             res.setHeader("Content-Type", "image/png");
             res.setHeader("Content-Disposition", `inline; filename=${path.basename(qrCodePath)}`);
 
@@ -75,12 +80,9 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * Handles WebSocket authentication flow.
-     */
     async handleWebSocketConnection(ws) {
         console.log("✅ WebSocket Client Connected");
-        const clientId = Date.now().toString(); // Generate a unique client ID
+        const clientId = Date.now().toString();
         this.webSocketClients.set(clientId, ws);
 
         ws.on("message", async (message) => {
@@ -98,16 +100,10 @@ class AuthEndpoint {
                     }
 
                     ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
-                } 
-                
-                else if (data.action === "verifyAuthentication") {
+                } else if (data.action === "verifyAuthentication") {
                     console.log("⚡ Verifying Authentication...");
                     const { walletAddress, signedMessage, authType, gameName, userName } = data;
-
-                    // ✅ Call MasterAuth for authentication
                     const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName);
-
-                    // ✅ Send authentication result to the game
                     this.sendAuthResponseToGame(ws, authResult);
                 }
             } catch (error) {
@@ -126,9 +122,6 @@ class AuthEndpoint {
         });
     }
 
-    /**
-     * Sends authentication response back to the game.
-     */
     sendAuthResponseToGame(ws, authResult) {
         try {
             const responsePayload = {
@@ -145,15 +138,12 @@ class AuthEndpoint {
         }
     }
 
-    /**
-     * Sends JWT to authenticated WebSocket client.
-     */
     async sendJWTToClient(sessionId, token) {
         for (const [clientId, ws] of this.webSocketClients) {
             if (ws.readyState === WebSocket.OPEN) {
                 console.log("✅ Sending JWT to client:", clientId);
                 ws.send(JSON.stringify({ token }));
-                ws.close(); // Close connection after sending JWT
+                ws.close();
                 this.webSocketClients.delete(clientId);
             }
         }

@@ -1,0 +1,24 @@
+import mongoose from "mongoose";
+
+const playerDataSchema = new mongoose.Schema({
+  user_name: { type: String, required: true, index: true },
+  game_id: { type: String, required: true, index: true },
+  data: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+  updated_at: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// ✅ Auto-update `updated_at` when saving
+playerDataSchema.pre("save", function (next) {
+  this.updated_at = Date.now();
+  next();
+});
+
+const PlayerData = mongoose.model("PlayerData", playerDataSchema);
+
+export default PlayerData;

@@ -1,3 +1,5 @@
+// File: /HVM/MasterAuth.js
+
 import User from "../Schema/userSchema.js"; // ✅ User schema
 import AddUser from "../HVM/AddUser.js"; // ✅ User creator
 import JWTManager from "../HVM/JWTManager.js"; // ✅ Token generator
@@ -5,15 +7,16 @@ import AuthValidator from "../HVM/AuthValidator.js"; // ✅ Signature verifier
 
 class MasterAuth {
     /**
-     * @param {MongoClient} mongoClient - Required for JWTManager
+     * @param {MongoClient} mongoClient 
+     * @param {string} dbName 
      */
-    constructor(mongoClient) {
-        if (!mongoClient) {
-            throw new Error("MongoClient instance is required for MasterAuth.");
+    constructor(mongoClient, dbName) {
+        if (!mongoClient || !dbName) {
+            throw new Error("❌ MasterAuth requires both MongoClient and DB name.");
         }
 
         this.authValidator = new AuthValidator();
-        this.jwtManager = new JWTManager(mongoClient); // ✅ pass client
+        this.jwtManager = new JWTManager(mongoClient, dbName); // ✅ FIXED
     }
 
     /**
@@ -41,13 +44,13 @@ class MasterAuth {
             }
 
             // ✅ Check if user exists
-            let existingUser = await User.findOne({ "auth_wallets.ETH": walletAddress });
+            const existingUser = await User.findOne({ "auth_wallets.ETH": walletAddress });
 
             if (existingUser) {
                 const token = await this.jwtManager.generateToken(
                     existingUser.user_name,
-                    walletAddress,
-                    gameName
+                    existingUser.auth_wallets,
+                    "ETH" // ✅ Replace later with actual network if needed
                 );
 
                 console.log("✅ Auth success - existing user:", existingUser.user_name);

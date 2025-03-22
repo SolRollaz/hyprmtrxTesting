@@ -34,7 +34,7 @@ class AuthEndpoint {
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
         this.masterAuth = new MasterAuth(this.client, this.dbName); // ✅ PASS BOTH
-        this.checkUserName = new CheckUserName(this.client);
+        this.checkUserName = new CheckUserName(this.client, this.dbName); // ✅
         this.webSocketClients = new Map();
     }
 

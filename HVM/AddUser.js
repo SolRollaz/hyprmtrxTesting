@@ -1,32 +1,24 @@
-import User from "../Schema/userSchema.js";  // Correct path for the User model
-import WalletManager from "../HVM/WalletManager.js";  // Correct path for WalletManager
+import User from "../Schema/userSchema.js";
 
 class AddUser {
+    /**
+     * Create a new user account using only the external ETH wallet.
+     * @param {string} walletAddress - ETH address user authenticated with
+     * @param {string} userName - Chosen player name
+     * @returns {Promise<User|null>}
+     */
     static async createNewUser(walletAddress, userName) {
         try {
-            // ✅ Step 1: Generate blockchain wallets
-            const generatedWallets = await WalletManager.generateWallets(walletAddress);
-
-            if (!generatedWallets) {
-                console.error("Failed to generate wallets for new user.");
-                return null;
-            }
-
-            // ✅ Step 2: Create new user entry
             const newUser = new User({
                 user_name: userName,
+
                 auth_wallets: {
-                    ETH: walletAddress,
-                    DAG: generatedWallets.DAG,
-                    AVAX: generatedWallets.AVAX,
-                    BNB: generatedWallets.BNB
+                    ETH: walletAddress
                 },
-                hyprmtrx_wallets: [
-                    { network: "DAG", address: generatedWallets.DAG },
-                    { network: "AVAX", address: generatedWallets.AVAX },
-                    { network: "BNB", address: generatedWallets.BNB },
-                    { network: "ETH", address: walletAddress }
-                ],
+
+                // ⚠️ Do NOT assign anything to hyprmtrx_wallets at creation time
+                hyprmtrx_wallets: [],
+
                 WEB3_transaction_history: [],
                 HPMX_transaction_history: [],
                 owned_nfts: [],
@@ -35,13 +27,12 @@ class AddUser {
                 created_at: new Date()
             });
 
-            // ✅ Step 3: Save new user to database
             await newUser.save();
-            console.log(`New user created: ${userName}`);
+            console.log(`✅ New user created: ${userName}`);
 
             return newUser;
         } catch (error) {
-            console.error("Error creating new user:", error.message);
+            console.error("❌ Error creating new user:", error.message);
             return null;
         }
     }

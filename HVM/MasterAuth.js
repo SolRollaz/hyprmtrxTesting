@@ -1,14 +1,19 @@
-// File: /HVM/MasterAuth.js
-
 import User from "../Schema/userSchema.js"; // ✅ User schema
 import AddUser from "../HVM/AddUser.js"; // ✅ User creator
 import JWTManager from "../HVM/JWTManager.js"; // ✅ Token generator
 import AuthValidator from "../HVM/AuthValidator.js"; // ✅ Signature verifier
 
 class MasterAuth {
-    constructor() {
+    /**
+     * @param {MongoClient} mongoClient - Required for JWTManager
+     */
+    constructor(mongoClient) {
+        if (!mongoClient) {
+            throw new Error("MongoClient instance is required for MasterAuth.");
+        }
+
         this.authValidator = new AuthValidator();
-        this.jwtManager = new JWTManager();
+        this.jwtManager = new JWTManager(mongoClient); // ✅ pass client
     }
 
     /**

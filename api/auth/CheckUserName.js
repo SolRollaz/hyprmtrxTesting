@@ -1,4 +1,4 @@
-import User from "../Schema/userSchema.js";
+import User from "../../Schema/userSchema.js";
 import R18Check from "../../HVM/R18Check.js";
 import AddUser from "../../HVM/AddUser.js";
 import JWTManager from "../../HVM/JWTManager.js";

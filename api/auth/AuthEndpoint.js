@@ -1,5 +1,3 @@
-// File: /api/auth/AuthEndpoint.js
-
 import express from "express";
 import QR_Code_Auth from "../../HVM/QRCode_Auth.js";
 import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
@@ -22,7 +20,6 @@ class AuthEndpoint {
         }
 
         this.client = new MongoClient(this.mongoUri, {
-            useUnifiedTopology: true,
             connectTimeoutMS: 10000,
             serverSelectionTimeoutMS: 10000,
         });
@@ -36,7 +33,7 @@ class AuthEndpoint {
 
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
-        this.masterAuth = new MasterAuth();
+        this.masterAuth = new MasterAuth(this.client); // ✅ FIXED
         this.checkUserName = new CheckUserName(this.client);
         this.webSocketClients = new Map();
     }

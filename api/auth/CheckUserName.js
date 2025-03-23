@@ -4,9 +4,18 @@ import AddUser from "../../HVM/AddUser.js";
 import JWTManager from "../../HVM/JWTManager.js";
 
 class CheckUserName {
-    constructor(dbClient) {
-        this.dbClient = dbClient;
-        this.jwtManager = new JWTManager();
+    /**
+     * @param {MongoClient} mongoClient
+     * @param {string} dbName
+     */
+    constructor(mongoClient, dbName) {
+        if (!mongoClient || !dbName) {
+            throw new Error("❌ CheckUserName requires both MongoClient and DB name.");
+        }
+
+        this.mongoClient = mongoClient;
+        this.dbName = dbName;
+        this.jwtManager = new JWTManager(mongoClient, dbName);
     }
 
     /**
@@ -48,7 +57,8 @@ class CheckUserName {
 
         const token = await this.jwtManager.generateToken(
             newUser.user_name,
-            walletAddress
+            newUser.auth_wallets,
+            "ETH" // Default network context for token
         );
 
         return {
@@ -76,7 +86,7 @@ class CheckUserName {
     }
 
     /**
-     * REST handler
+     * REST fallback handler
      */
     async handleREST(req, res) {
         try {

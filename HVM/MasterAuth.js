@@ -1,85 +1,78 @@
-// File: /HVM/MasterAuth.js
-
-import User from "../Schema/userSchema.js"; // ✅ User schema
-import AddUser from "../HVM/AddUser.js"; // ✅ User creator
-import JWTManager from "../HVM/JWTManager.js"; // ✅ Token generator
-import AuthValidator from "../HVM/AuthValidator.js"; // ✅ Signature verifier
+import User from "../Schema/userSchema.js";
+import AddUser from "../HVM/AddUser.js";
+import JWTManager from "../HVM/JWTManager.js";
+import AuthValidator from "../HVM/AuthValidator.js";
 
 class MasterAuth {
-    /**
-     * @param {MongoClient} mongoClient 
-     * @param {string} dbName 
-     */
     constructor(mongoClient, dbName) {
         if (!mongoClient || !dbName) {
             throw new Error("❌ MasterAuth requires both MongoClient and DB name.");
         }
 
         this.authValidator = new AuthValidator();
-        this.jwtManager = new JWTManager(mongoClient, dbName); // ✅ FIXED
+        this.jwtManager = new JWTManager(mongoClient, dbName);
     }
 
     /**
-     * Verifies the wallet signature
-     * - Returns token if user exists
-     * - Returns `awaiting_username` if new wallet
+     * Verifies the wallet signature.
+     * Returns:
+     * - success → token + userName
+     * - awaiting_username → wallet needs username assignment
+     * - failure → invalid signature or error
      */
     async verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName = null) {
         try {
-            const message = this.generateAuthMessage(walletAddress);
-            console.log(`🔐 Verifying signed message for wallet: ${walletAddress}`);
+            const authMessage = this.generateAuthMessage(walletAddress);
+            console.log(`🔐 Validating signature for wallet: ${walletAddress}`);
 
-            const isAuthenticated = await this.authValidator.validateWallet(
+            const isValid = await this.authValidator.validateWallet(
                 authType,
                 walletAddress,
                 signedMessage,
-                message
+                authMessage
             );
 
-            if (!isAuthenticated) {
+            if (!isValid) {
                 return {
                     status: "failure",
-                    message: "Wallet authentication failed. Please try again."
+                    message: "Wallet signature verification failed."
                 };
             }
 
-            // ✅ Check if user exists
-            const existingUser = await User.findOne({ "auth_wallets.ETH": walletAddress });
+            const user = await User.findOne({ "auth_wallets.ETH": walletAddress });
 
-            if (existingUser) {
+            if (user) {
                 const token = await this.jwtManager.generateToken(
-                    existingUser.user_name,
-                    existingUser.auth_wallets,
-                    "ETH" // ✅ Replace later with actual network if needed
+                    user.user_name,
+                    user.auth_wallets,
+                    "ETH"
                 );
 
-                console.log("✅ Auth success - existing user:", existingUser.user_name);
+                console.log(`✅ Authenticated: ${user.user_name}`);
                 return {
                     status: "success",
-                    message: "Wallet authenticated successfully.",
+                    message: "Wallet authenticated.",
                     token,
-                    userName: existingUser.user_name
+                    userName: user.user_name
                 };
             }
 
-            // ❌ No user yet → Request player name before continuing
+            // ❌ New wallet - needs player name
             return {
                 status: "awaiting_username",
-                message: "Please choose a player name to complete registration.",
+                message: "Please enter a username to complete registration.",
                 walletAddress
             };
-        } catch (error) {
-            console.error("❌ Error verifying signed message:", error.message);
+
+        } catch (err) {
+            console.error("❌ Signature verification error:", err.message);
             return {
                 status: "failure",
-                message: "Internal server error during authentication."
+                message: "Internal authentication error."
             };
         }
     }
 
-    /**
-     * Standard message for wallet auth signing
-     */
     generateAuthMessage(walletAddress) {
         return `Sign this message to authenticate with your wallet: ${walletAddress}`;
     }

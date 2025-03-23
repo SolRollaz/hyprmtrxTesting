@@ -1,18 +1,18 @@
-// index.js
+// File: /api/auth/index.js
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
 import rateLimit from 'express-rate-limit';
 import http from 'http';
 import { fileURLToPath } from 'url';
-import WebSocket from 'ws';
+import { WebSocketServer } from 'ws'; // ✅ FIX: Correct import for WebSocket in ESM
 import AuthEndpoint from './AuthEndpoint.js';
 
-// Setup __dirname
+// Setup __dirname (ESM-compatible)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load env
+// Load .env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
@@ -44,7 +44,7 @@ app.use(express.static("public"));
 
 // ✅ Rate Limiting
 const authLimiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
+    windowMs: 60 * 1000,
     max: 5,
     message: { status: "failure", message: "Too many authentication attempts. Try again later." },
     standardHeaders: true,
@@ -87,7 +87,6 @@ app.post("/api/verify-signature", async (req, res) => {
     }
 });
 
-// ✅ New REST fallback for username registration
 app.post("/api/check-username", async (req, res) => {
     try {
         const { walletAddress, userName } = req.body;
@@ -107,7 +106,7 @@ app.post("/api/check-username", async (req, res) => {
 });
 
 // ✅ WebSocket support
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocketServer({ server }); // ✅ FIXED HERE
 wss.on('connection', (ws) => {
     authAPI.handleWebSocketConnection(ws);
 });

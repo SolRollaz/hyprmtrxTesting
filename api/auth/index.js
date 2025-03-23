@@ -8,11 +8,11 @@ import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
 
-// Setup __dirname in ESM
+// ESM __dirname shim
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables
+// Load .env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
@@ -23,9 +23,14 @@ const server = http.createServer(app);
 const port = 3000;
 const authAPI = new AuthEndpoint();
 
-// ✅ CORS middleware — Must come BEFORE routes
+// ✅ Dynamic CORS setup
+const allowedOrigins = ["https://hyprmtrx.com", "https://hyprmtrx.xyz"];
 app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    const origin = req.headers.origin;
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -100,12 +105,12 @@ app.post("/api/check-username", async (req, res) => {
     }
 });
 
-// ✅ Serve .well-known files (WalletConnect)
+// ✅ Serve WalletConnect file
 app.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
-// ✅ WebSocket support
+// ✅ WebSocket handling
 const wss = new WebSocketServer({ server });
 wss.on("connection", (ws) => {
     authAPI.handleWebSocketConnection(ws);

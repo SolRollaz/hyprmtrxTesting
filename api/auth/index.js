@@ -5,14 +5,14 @@ import express from 'express';
 import rateLimit from 'express-rate-limit';
 import http from 'http';
 import { fileURLToPath } from 'url';
-import { WebSocketServer } from 'ws'; // ✅ FIX: Correct import for WebSocket in ESM
+import { WebSocketServer } from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
 
-// Setup __dirname (ESM-compatible)
+// Setup __dirname in ESM
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env
+// Load environment variables
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
 console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
@@ -21,15 +21,14 @@ console.log("✅ Current Working Directory:", process.cwd());
 const app = express();
 const server = http.createServer(app);
 const port = 3000;
-
 const authAPI = new AuthEndpoint();
 
-// ✅ HARDCODED CORS FIX
+// ✅ CORS middleware — Must come BEFORE routes
 app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "https://hyprmtrx.com");
-    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
-    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    res.header("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Origin", "https://hyprmtrx.com");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
 
     if (req.method === "OPTIONS") {
         return res.sendStatus(204);
@@ -59,10 +58,6 @@ app.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
         console.error("❌ API Error in /api/auth:", e);
         res.status(500).json({ error: e.message });
     }
-});
-
-app.get("/.well-known/walletconnect.txt", (req, res) => {
-    res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
 app.get("/", (req, res) => {
@@ -105,9 +100,14 @@ app.post("/api/check-username", async (req, res) => {
     }
 });
 
+// ✅ Serve .well-known files (WalletConnect)
+app.get("/.well-known/walletconnect.txt", (req, res) => {
+    res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
+});
+
 // ✅ WebSocket support
-const wss = new WebSocketServer({ server }); // ✅ FIXED HERE
-wss.on('connection', (ws) => {
+const wss = new WebSocketServer({ server });
+wss.on("connection", (ws) => {
     authAPI.handleWebSocketConnection(ws);
 });
 

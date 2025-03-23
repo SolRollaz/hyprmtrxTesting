@@ -19,7 +19,7 @@ class CheckUserName {
     }
 
     /**
-     * Shared validation and creation logic
+     * Shared validation and user creation logic
      */
     async validateAndRegister(walletAddress, userName) {
         const normalizedUserName = userName.trim().toLowerCase();
@@ -58,7 +58,7 @@ class CheckUserName {
         const token = await this.jwtManager.generateToken(
             newUser.user_name,
             newUser.auth_wallets,
-            "ETH" // Default network context for token
+            "ETH" // Hardcoded for now — can be made dynamic later
         );
 
         return {

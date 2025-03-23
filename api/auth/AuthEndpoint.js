@@ -1,3 +1,4 @@
+// File: /api/auth/AuthEndpoint.js
 import express from "express";
 import QR_Code_Auth from "../../HVM/QRCode_Auth.js";
 import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
@@ -6,8 +7,7 @@ import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
 import MasterAuth from "../../HVM/MasterAuth.js";
-import WebSocket from "ws";
-import CheckUserName from "./CheckUserName.js";
+import CheckUserName from "./CheckUserName.js"; // ✅ Removed WebSocket import
 
 class AuthEndpoint {
     constructor() {
@@ -33,8 +33,8 @@ class AuthEndpoint {
 
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
-        this.masterAuth = new MasterAuth(this.client, this.dbName); // ✅ PASS BOTH
-        this.checkUserName = new CheckUserName(this.client, this.dbName); // ✅
+        this.masterAuth = new MasterAuth(this.client, this.dbName);
+        this.checkUserName = new CheckUserName(this.client, this.dbName);
         this.webSocketClients = new Map();
     }
 
@@ -154,7 +154,7 @@ class AuthEndpoint {
 
     async sendJWTToClient(sessionId, token) {
         for (const [clientId, ws] of this.webSocketClients) {
-            if (ws.readyState === WebSocket.OPEN) {
+            if (ws.readyState === 1) {
                 console.log("✅ Sending JWT to client:", clientId);
                 ws.send(JSON.stringify({ token }));
                 ws.close();

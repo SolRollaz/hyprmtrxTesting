@@ -1,12 +1,9 @@
-import express from "express";
-import QR_Code_Auth from "../../HVM/QRCode_Auth.js";
 import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
 import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
 import MasterAuth from "../../HVM/MasterAuth.js";
-import CheckUserName from "./CheckUserName.js";
 
 class AuthEndpoint {
     constructor() {
@@ -31,9 +28,7 @@ class AuthEndpoint {
             });
 
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
-        this.qrCodeAuth = new QR_Code_Auth(this.client, this.dbName, this.systemConfig);
         this.masterAuth = new MasterAuth(this.client, this.dbName);
-        this.checkUserName = new CheckUserName(this.client, this.dbName);
         this.webSocketClients = new Map();
     }
 
@@ -51,7 +46,7 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
-            const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
+            const qrCodeResult = await this.qrCodeAuth_NEW.generateAuthenticationQRCode();
             if (qrCodeResult.status !== "success") {
                 return res.status(500).json({ status: "failure", message: qrCodeResult.message });
             }
@@ -80,7 +75,7 @@ class AuthEndpoint {
                 const data = JSON.parse(message);
 
                 if (data.action === "authenticateUser") {
-                    const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
+                    const qrCodeResult = await this.qrCodeAuth_NEW.generateAuthenticationQRCode();
                     if (qrCodeResult.status !== "success") {
                         return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
                     }
@@ -90,10 +85,6 @@ class AuthEndpoint {
                     const { walletAddress, signedMessage, authType, gameName } = data;
                     const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
                     this.sendAuthResponseToGame(ws, authResult);
-
-                } else if (data.action === "checkUserName") {
-                    const { walletAddress, userName } = data;
-                    await this.checkUserName.handle(ws, walletAddress, userName);
                 }
             } catch (error) {
                 console.error("❌ WebSocket processing error:", error.message);

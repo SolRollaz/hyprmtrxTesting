@@ -1,5 +1,3 @@
-// File: /api/auth/index.js
-
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
@@ -8,20 +6,19 @@ import http from 'http';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
+import SessionStore from '../HVM/SessionStore.js'; // ⬅️ auto-cleanup logic added
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.resolve(__dirname, '.env') });
 
-console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
-
 const app = express();
 const server = http.createServer(app);
 const port = 4000;
 const authAPI = new AuthEndpoint();
 
-// CORS
+// ✅ CORS
 const allowedOrigins = ["https://hyprmtrx.com", "https://hyprmtrx.xyz"];
 app.use((req, res, next) => {
     const origin = req.headers.origin;
@@ -38,6 +35,7 @@ app.use((req, res, next) => {
 app.use(express.json());
 app.use(express.static("public"));
 
+// ✅ Rate limiter
 const authLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 5,
@@ -46,7 +44,7 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Auth routes
+// ✅ Auth routes
 app.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
@@ -89,15 +87,21 @@ app.post("/api/check-username", async (req, res) => {
     }
 });
 
+// ✅ WalletConnect support
 app.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
-// WebSocket
+// ✅ WebSocket support
 const wss = new WebSocketServer({ server });
 wss.on("connection", (ws) => authAPI.handleWebSocketConnection(ws));
 
-// Boot
+// ✅ Session cleanup every 5 minutes
+setInterval(() => {
+    SessionStore.clearExpired(); // TTL is 10 minutes by default
+}, 5 * 60 * 1000);
+
+// ✅ Start server
 server.listen(port, () => {
     console.log(`🚀 Auth API running on http://localhost:${port}`);
 });

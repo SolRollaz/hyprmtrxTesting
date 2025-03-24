@@ -5,7 +5,7 @@ import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
-import MasterAuth from "../../newHVM/MasterAuth.js";
+import MasterAuth from "../../HVM/MasterAuth.js";
 import CheckUserName from "./CheckUserName.js";
 
 class AuthEndpoint {

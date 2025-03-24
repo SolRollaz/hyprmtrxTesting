@@ -1,4 +1,3 @@
-// File: /api/auth/index.js
 import dotenv from 'dotenv';
 import path from 'path';
 import express from 'express';
@@ -7,46 +6,36 @@ import http from 'http';
 import { fileURLToPath } from 'url';
 import { WebSocketServer } from 'ws';
 import AuthEndpoint from './AuthEndpoint.js';
+import SessionStore from '../HVM/SessionStore.js'; // ⬅️ auto-cleanup logic added
 
-// ESM __dirname shim
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load .env
 dotenv.config({ path: path.resolve(__dirname, '.env') });
-
-console.log("✅ Loaded Mongo URI:", process.env.MONGO_URI);
-console.log("✅ Current Working Directory:", process.cwd());
 
 const app = express();
 const server = http.createServer(app);
 const port = 4000;
 const authAPI = new AuthEndpoint();
 
-// ✅ Dynamic CORS setup
+// ✅ CORS
 const allowedOrigins = ["https://hyprmtrx.com", "https://hyprmtrx.xyz"];
 app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (allowedOrigins.includes(origin)) {
         res.setHeader("Access-Control-Allow-Origin", origin);
     }
-
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.setHeader("Access-Control-Allow-Credentials", "true");
-
-    if (req.method === "OPTIONS") {
-        return res.sendStatus(204);
-    }
-
+    if (req.method === "OPTIONS") return res.sendStatus(204);
     next();
 });
 
-// ✅ Middleware
 app.use(express.json());
 app.use(express.static("public"));
 
-// ✅ Rate Limiting
+// ✅ Rate limiter
 const authLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 5,
@@ -55,25 +44,23 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// ✅ Routes
+// ✅ Auth routes
 app.post(['/', '/api/auth/'], authLimiter, async (req, res) => {
     try {
         await authAPI.handleRequest(req, res);
     } catch (e) {
-        console.error("❌ API Error in /api/auth:", e);
+        console.error("❌ /api/auth:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
-app.get("/", (req, res) => {
-    res.status(200).json({ message: "Auth API is working!" });
-});
+app.get("/", (req, res) => res.status(200).json({ message: "Auth API is working!" }));
 
-app.get("/api/generate-qr", async (req, res) => {
+app.get("/api/generate-qr", async (_, res) => {
     try {
         await authAPI.handleQRCodeRequest(res);
     } catch (e) {
-        console.error("❌ API Error in /api/generate-qr:", e);
+        console.error("❌ /api/generate-qr:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -82,39 +69,37 @@ app.post("/api/verify-signature", async (req, res) => {
     try {
         await authAPI.handleVerifySignature(req, res);
     } catch (e) {
-        console.error("❌ API Error in /api/verify-signature:", e);
+        console.error("❌ /api/verify-signature:", e);
         res.status(500).json({ error: e.message });
     }
 });
 
 app.post("/api/check-username", async (req, res) => {
+    const { walletAddress, userName } = req.body;
+    if (!walletAddress || !userName) {
+        return res.status(400).json({ status: "failure", message: "Missing walletAddress or userName" });
+    }
     try {
-        const { walletAddress, userName } = req.body;
-
-        if (!walletAddress || !userName) {
-            return res.status(400).json({
-                status: "failure",
-                message: "Missing walletAddress or userName"
-            });
-        }
-
         await authAPI.checkUserName.handleREST(req, res);
     } catch (e) {
-        console.error("❌ API Error in /api/check-username:", e);
+        console.error("❌ /api/check-username:", e);
         res.status(500).json({ status: "failure", message: "Server error" });
     }
 });
 
-// ✅ Serve WalletConnect file
+// ✅ WalletConnect support
 app.get("/.well-known/walletconnect.txt", (req, res) => {
     res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
-// ✅ WebSocket handling
+// ✅ WebSocket support
 const wss = new WebSocketServer({ server });
-wss.on("connection", (ws) => {
-    authAPI.handleWebSocketConnection(ws);
-});
+wss.on("connection", (ws) => authAPI.handleWebSocketConnection(ws));
+
+// ✅ Session cleanup every 5 minutes
+setInterval(() => {
+    SessionStore.clearExpired(); // TTL is 10 minutes by default
+}, 5 * 60 * 1000);
 
 // ✅ Start server
 server.listen(port, () => {

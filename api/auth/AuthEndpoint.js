@@ -5,7 +5,7 @@ import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
-import MasterAuth from "../../HVM/MasterAuth.js";
+import MasterAuth from "../../newHVM/MasterAuth.js";
 import CheckUserName from "./CheckUserName.js";
 
 class AuthEndpoint {
@@ -14,7 +14,9 @@ class AuthEndpoint {
         this.mongoUri = process.env.MONGO_URI || this.systemConfig.getMongoUri();
         this.dbName = process.env.MONGO_DB_NAME || this.systemConfig.getMongoDbName();
 
-        if (!this.mongoUri || !this.dbName) throw new Error("❌ Mongo URI or DB Name is not defined.");
+        if (!this.mongoUri || !this.dbName) {
+            throw new Error("❌ Mongo URI or DB Name is not defined.");
+        }
 
         this.client = new MongoClient(this.mongoUri, {
             connectTimeoutMS: 10000,
@@ -36,14 +38,13 @@ class AuthEndpoint {
     }
 
     async handleRequest(req, res) {
-        console.log("📩 Incoming Auth Request:", req.body);
         if (!req.body.auth || req.body.auth !== "auth") {
             return res.status(400).json({ status: "failure", message: "Invalid or missing 'auth' parameter." });
         }
         try {
             return await this.handleQRCodeRequest(res);
         } catch (error) {
-            console.error("❌ Error handling request:", error.message);
+            console.error("❌ handleRequest error:", error.message);
             return res.status(500).json({ status: "failure", message: "Internal server error." });
         }
     }
@@ -62,10 +63,10 @@ class AuthEndpoint {
 
             res.setHeader("Content-Type", "image/png");
             res.setHeader("Content-Disposition", `inline; filename=${path.basename(qrCodePath)}`);
-            const qrStream = fs.createReadStream(qrCodePath);
-            qrStream.pipe(res);
+            fs.createReadStream(qrCodePath).pipe(res);
         } catch (error) {
-            return res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
+            console.error("❌ QR generation error:", error.message);
+            res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
         }
     }
 
@@ -77,7 +78,6 @@ class AuthEndpoint {
         ws.on("message", async (message) => {
             try {
                 const data = JSON.parse(message);
-                console.log("📩 WebSocket Received:", data);
 
                 if (data.action === "authenticateUser") {
                     const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
@@ -87,15 +87,8 @@ class AuthEndpoint {
                     ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
 
                 } else if (data.action === "verifyAuthentication") {
-                    const { walletAddress, signedMessage, authType, gameName, userName } = data;
-                    const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName);
-                    if (authResult.status === "awaiting_username") {
-                        return ws.send(JSON.stringify({
-                            status: "awaiting_username",
-                            message: authResult.message,
-                            walletAddress: authResult.walletAddress
-                        }));
-                    }
+                    const { walletAddress, signedMessage, authType, gameName } = data;
+                    const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
                     this.sendAuthResponseToGame(ws, authResult);
 
                 } else if (data.action === "checkUserName") {
@@ -103,7 +96,7 @@ class AuthEndpoint {
                     await this.checkUserName.handle(ws, walletAddress, userName);
                 }
             } catch (error) {
-                console.error("❌ Error processing WebSocket message:", error);
+                console.error("❌ WebSocket processing error:", error.message);
                 ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
             }
         });
@@ -114,7 +107,7 @@ class AuthEndpoint {
         });
 
         ws.on("error", (error) => {
-            console.error("⚠️ WebSocket Error:", error);
+            console.error("⚠️ WebSocket Error:", error.message);
         });
     }
 
@@ -127,9 +120,9 @@ class AuthEndpoint {
                 token: authResult.token || null,
             };
             ws.send(JSON.stringify(responsePayload));
-            console.log("✅ Sent authentication response to game:", responsePayload);
+            console.log("✅ Auth response sent:", responsePayload);
         } catch (error) {
-            console.error("❌ Error sending authentication response to game:", error.message);
+            console.error("❌ Failed to send auth response:", error.message);
         }
     }
 

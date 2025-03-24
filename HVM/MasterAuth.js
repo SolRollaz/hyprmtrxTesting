@@ -1,7 +1,6 @@
-import User from "../Schema/userSchema.js";
-import AddUser from "../HVM/AddUser.js";
 import JWTManager from "../HVM/JWTManager.js";
 import AuthValidator from "../HVM/AuthValidator.js";
+import SessionStore from "../HVM/SessionStore.js";
 
 class MasterAuth {
     constructor(mongoClient, dbName) {
@@ -13,17 +12,9 @@ class MasterAuth {
         this.jwtManager = new JWTManager(mongoClient, dbName);
     }
 
-    /**
-     * Verifies the wallet signature.
-     * Returns:
-     * - success → token + userName
-     * - awaiting_username → wallet needs username assignment
-     * - failure → invalid signature or error
-     */
-    async verifySignedMessage(walletAddress, signedMessage, authType, gameName, userName = null) {
+    async verifySignedMessage(walletAddress, signedMessage, authType, gameName) {
         try {
             const authMessage = this.generateAuthMessage(walletAddress);
-            console.log(`🔐 Validating signature for wallet: ${walletAddress}`);
 
             const isValid = await this.authValidator.validateWallet(
                 authType,
@@ -39,33 +30,21 @@ class MasterAuth {
                 };
             }
 
-            const user = await User.findOne({ "auth_wallets.ETH": walletAddress });
+            const token = await this.jwtManager.generateToken(
+                walletAddress,
+                { ETH: walletAddress },
+                "ETH"
+            );
 
-            if (user) {
-                const token = await this.jwtManager.generateToken(
-                    user.user_name,
-                    user.auth_wallets,
-                    "ETH"
-                );
+            SessionStore.storeSession(walletAddress, token);
 
-                console.log(`✅ Authenticated: ${user.user_name}`);
-                return {
-                    status: "success",
-                    message: "Wallet authenticated.",
-                    token,
-                    userName: user.user_name
-                };
-            }
-
-            // ❌ New wallet - needs player name
             return {
-                status: "awaiting_username",
-                message: "Please enter a username to complete registration.",
-                walletAddress
+                status: "success",
+                message: "Wallet authenticated.",
+                token
             };
 
         } catch (err) {
-            console.error("❌ Signature verification error:", err.message);
             return {
                 status: "failure",
                 message: "Internal authentication error."

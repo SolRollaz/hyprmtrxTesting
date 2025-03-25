@@ -32,10 +32,14 @@ class AuthEndpoint {
         this.webSocketClients = new Map();
     }
 
-    async waitForRelayConnection() {
-        if (!this.qrCodeAuth_NEW.core?.relayer.connected) {
-            console.warn("⏳ Waiting for WalletConnect relay to connect...");
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+    async waitForWalletConnectReady(maxWaitMs = 5000) {
+        const start = Date.now();
+        while (!this.qrCodeAuth_NEW.core?.relayer.connected) {
+            const elapsed = Date.now() - start;
+            if (elapsed > maxWaitMs) {
+                throw new Error("WalletConnect not ready after timeout.");
+            }
+            await new Promise((resolve) => setTimeout(resolve, 250));
         }
     }
 
@@ -53,7 +57,7 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
-            await this.waitForRelayConnection();
+            await this.waitForWalletConnectReady();
 
             const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
             if (qrCodeResult.status !== "success") {
@@ -88,7 +92,7 @@ class AuthEndpoint {
                 }
 
                 if (data.action === "authenticateUser") {
-                    await this.waitForRelayConnection();
+                    await this.waitForWalletConnectReady();
 
                     const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
                     if (qrCodeResult.status !== "success") {

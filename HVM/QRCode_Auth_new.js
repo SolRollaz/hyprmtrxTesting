@@ -1,4 +1,4 @@
-import { Core } from "@walletconnect/core";
+import { SignClient } from "@walletconnect/sign-client";
 import qrCode from "qrcode";
 import path from "path";
 import fs from "fs";
@@ -16,8 +16,10 @@ class QRCodeAuth {
 
         this.qrCodeDir = path.join(process.cwd(), "QR_Codes");
         this.ensureQRCodeDirectory();
-        this.core = this.initializeCore();
         this.sessions = new Map(); // Store active Web3 authentication sessions
+
+        this.signClient = null;
+        this.initializeSignClient();
     }
 
     ensureQRCodeDirectory() {
@@ -27,55 +29,147 @@ class QRCodeAuth {
         }
     }
 
-    initializeCore() {
-        console.log("🔄 Initializing WalletConnect Core...");
-        const core = new Core({
-            projectId: this.systemConfig.walletConnect.projectId,
+    async initializeSignClient() {
+        if (this.signClient) return;
+    
+        this.signClient = await SignClient.init({
+          projectId: this.systemConfig.walletConnect.projectId,
+          relayUrl: this.systemConfig.walletConnect.relayUrl,
+          metadata: {
+            name: this.systemConfig.walletConnect.metadata.name || "Default App",
+            description:
+              this.systemConfig.walletConnect.metadata.description ||
+              "Default Description",
+            url:
+              this.systemConfig.walletConnect.metadata.url || "https://example.com",
+            icons: this.systemConfig.walletConnect.metadata.icons || [
+              "https://example.com/favicon.png",
+            ],
+          },
         });
-
-        core.relayer.on("relayer_connect", () => console.log("✅ Connected to WalletConnect relay server."));
-        core.relayer.on("relayer_disconnect", () => console.log("⚠️ Disconnected from WalletConnect relay server."));
-
-        return core;
     }
 
-    async generateQRCode() {
+    async generateAuthenticationQRCode() {
+
         try {
-            console.log("🚀 Starting QR Code Generation...");
-
-            // Step 1: Create a WalletConnect pairing URI
-            const pairing = await this.core.pairing.create();
-            const uri = pairing.uri;
-
-            if (!uri) {
-                throw new Error("❌ Failed to generate WalletConnect URI.");
-            }
-
-            console.log("🔗 WalletConnect URI Created:", uri);
-
-            // Step 2: Generate a unique session ID
-            const sessionId = `session_${Date.now()}`;
+            console.log("Starting QR code generation process...");
+      
+            const uniqueId = `${Date.now()}_${Math.random()
+              .toString(36)
+              .substr(2, 9)}`;
+            const sessionId = `session_${uniqueId}`;
+            const filePath = path.join(
+              this.qrCodeDir,
+              `${sessionId}_auth_qrcode.png`
+            );
+            const publicUrl = `${
+              this.systemConfig.walletConnect.qrCodeBaseUrl
+            }/${path.basename(filePath)}`;
+      
+            const { uri, approval } = await this.signClient.connect({
+              requiredNamespaces: {
+                eip155: {
+                  methods: [
+                    "eth_sendTransaction",
+                    "eth_signTransaction",
+                    "eth_sign",
+                    "personal_sign",
+                    "eth_signTypedData",
+                  ],
+                  chains: ["eip155:1"],
+                  events: ["chainChanged", "accountsChanged"],
+                },
+              },
+            });
+      
+            await qrCode.toFile(filePath, uri, {
+              color: { dark: "#000000", light: "#ffffff" },
+            });
+      
+            new Promise(async (resolve, reject)=>{
+              try{
+      
+                const session = await approval()
+                console.log("session : ", session);
+                // this.activeSessions.set(sessionId, session);
+                
+                resolve();
+              }catch(e){
+                console.log(e)
+                reject();
+              }
+            }).then(()=>{
+              console.log("success session");
+            }).catch(()=>{
+              console.log("success failed");
+            })
+      
+            console.log(
+              `[Session: ${sessionId}] QR code generated and saved: ${filePath}`
+            );
+      
+            // Store session approval promise for tracking
             this.sessions.set(sessionId, { uri, status: "pending" });
-
-            // Step 3: Save QR code to file
-            const filePath = path.join(this.qrCodeDir, `${sessionId}.png`);
-            await qrCode.toFile(filePath, uri);
-
-            console.log(`✅ QR Code saved: ${filePath}`);
-
-            // Step 4: Generate a public URL for the QR code
-            const publicUrl = `${this.systemConfig.walletConnect.qrCodeBaseUrl}/${path.basename(filePath)}`;
-
-            return { 
-                status: "success",
-                sessionId, 
-                qrCodeUrl: publicUrl, 
-                walletConnectUri: uri 
+      
+            return {
+              status: "success",
+              message: "QR code generated successfully.",
+              qr_code_path: filePath,
+              qrCodeUrl: publicUrl,
+              sessionId: sessionId,
+              walletConnectUri: uri,
             };
-
         } catch (error) {
-            console.error("❌ Error generating QR code:", error.message);
-            return { status: "failure", message: "QR Code generation error" };
+            console.error("Error generating QR code:", error.message);
+            return { status: "failure", message: "Failed to generate QR code." };
+        }
+
+    }
+
+    async waitForScan(sessionId) {
+        try {
+          if (!this.activeSessions.has(sessionId)) {
+            throw new Error("Session not found.");
+          }
+    
+          console.log(`Waiting for wallet to scan QR code... [Session: ${sessionId}]`);
+          const { approval } = this.activeSessions.get(sessionId);
+    
+          const session = await approval(); // Wait for QR scan & wallet connection
+          console.log(`Wallet connected! [Session: ${sessionId}]`, session);
+    
+          return { status: "success", session };
+        } catch (error) {
+          console.error("Error waiting for QR scan:", error.message);
+          return { status: "failure", message: error.message };
+        }
+      }
+    
+    async signMessage(sessionId, message) {
+        try {
+          if (!this.activeSessions.has(sessionId)) {
+            throw new Error("Session not found.");
+          }
+    
+          const { session } = await this.waitForScan(sessionId); // Ensure QR was scanned
+          const walletAddress = session.namespaces.eip155.accounts[0].split(":")[2]; // Extract wallet address
+          console.log(`Signing message for wallet: ${walletAddress}`);
+    
+          const signature = await this.signClient.request({
+            topic: session.topic,
+            chainId: "eip155:1",
+            request: {
+              method: "personal_sign",
+              params: [message, walletAddress],
+            },
+          });
+    
+          console.log(`Message signed successfully! [Session: ${sessionId}]`, signature);
+    
+          return { status: "success", walletAddress, signature };
+        } catch (error) {
+          console.error("Error signing message:", error.message);
+          return { status: "failure", message: error.message };
         }
     }
 
@@ -90,7 +184,7 @@ class QRCodeAuth {
             console.log("🔎 Verifying signature for session:", sessionId);
 
             // Validate signature using WalletConnect
-            const verified = this.core.verify({
+            const verified = this.signClient.core.verify({
                 uri: session.uri,
                 signature,
                 message

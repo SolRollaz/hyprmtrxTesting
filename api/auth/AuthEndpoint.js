@@ -3,7 +3,6 @@ import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
-import MasterAuth from "../../HVM/MasterAuth.js";
 
 class AuthEndpoint {
     constructor() {
@@ -15,31 +14,22 @@ class AuthEndpoint {
             throw new Error("❌ Mongo URI or DB Name is not defined.");
         }
 
-        this.client = new MongoClient(this.mongoUri, {
-            connectTimeoutMS: 10000,
-            serverSelectionTimeoutMS: 10000,
-        });
-
-        this.client.connect()
-            .then(() => console.log("✅ MongoDB connected successfully"))
-            .catch((err) => {
-                console.error("❌ MongoDB connection failed:", err.message);
-                process.exit(1);
-            });
-
+        this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
-        this.masterAuth = new MasterAuth(this.client, this.dbName);
-        this.webSocketClients = new Map();
+        this.webSocketClients = new Map(); // Store WebSocket connections
     }
 
     async handleRequest(req, res) {
+        console.log("📩 Incoming Auth Request:", req.body);
+
         if (!req.body.auth || req.body.auth !== "auth") {
             return res.status(400).json({ status: "failure", message: "Invalid or missing 'auth' parameter." });
         }
+
         try {
             return await this.handleQRCodeRequest(res);
         } catch (error) {
-            console.error("❌ handleRequest error:", error.message);
+            console.error("❌ Error handling request:", error.message);
             return res.status(500).json({ status: "failure", message: "Internal server error." });
         }
     }
@@ -47,51 +37,60 @@ class AuthEndpoint {
     async handleQRCodeRequest(res) {
         try {
             const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
+
             if (qrCodeResult.status !== "success") {
+                console.error("❌ QR Code generation failed:", qrCodeResult.message);
                 return res.status(500).json({ status: "failure", message: qrCodeResult.message });
             }
 
             const qrCodePath = path.join(process.cwd(), "QR_Codes", `${qrCodeResult.sessionId}.png`);
+
             if (!fs.existsSync(qrCodePath)) {
+                console.error("❌ QR Code file not found at path:", qrCodePath);
                 return res.status(500).json({ status: "failure", message: "QR Code file not found." });
             }
 
+            console.log(`✅ Streaming QR Code from path: ${qrCodePath}`);
             res.setHeader("Content-Type", "image/png");
             res.setHeader("Content-Disposition", `inline; filename=${path.basename(qrCodePath)}`);
             fs.createReadStream(qrCodePath).pipe(res);
         } catch (error) {
-            console.error("❌ QR generation error:", error.message);
-            res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
+            console.error("❌ Error generating QR code:", error.message);
+            return res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
         }
     }
 
     async handleWebSocketConnection(ws) {
+        console.log("✅ WebSocket Client Connected");
         const clientId = Date.now().toString();
         this.webSocketClients.set(clientId, ws);
-        console.log("✅ WebSocket Client Connected");
 
         ws.on("message", async (message) => {
             try {
                 const data = JSON.parse(message);
+                console.log("📩 WebSocket Received:", data);
 
                 if (data.action === "ping") {
                     return ws.send(JSON.stringify({ type: "pong" }));
                 }
 
                 if (data.action === "authenticateUser") {
+                    console.log("⚡ Generating QR Code via WalletConnect v2...");
                     const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
+
                     if (qrCodeResult.status !== "success") {
+                        console.error("❌ QR Code generation failed:", qrCodeResult.message);
                         return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
                     }
-                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
 
-                } else if (data.action === "verifyAuthentication") {
-                    const { walletAddress, signedMessage, authType, gameName } = data;
-                    const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
-                    this.sendAuthResponseToGame(ws, authResult);
+                    ws.send(JSON.stringify({
+                        qrCodeUrl: qrCodeResult.qrCodeUrl,
+                        sessionId: qrCodeResult.sessionId,
+                        walletConnectUri: qrCodeResult.walletConnectUri,
+                    }));
                 }
             } catch (error) {
-                console.error("❌ WebSocket processing error:", error.message);
+                console.error("❌ Error processing WebSocket message:", error);
                 ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
             }
         });
@@ -102,28 +101,14 @@ class AuthEndpoint {
         });
 
         ws.on("error", (error) => {
-            console.error("⚠️ WebSocket Error:", error.message);
+            console.error("⚠️ WebSocket Error:", error);
         });
-    }
-
-    sendAuthResponseToGame(ws, authResult) {
-        try {
-            const responsePayload = {
-                status: authResult.status,
-                message: authResult.message,
-                userName: authResult.userName || null,
-                token: authResult.token || null,
-            };
-            ws.send(JSON.stringify(responsePayload));
-            console.log("✅ Auth response sent:", responsePayload);
-        } catch (error) {
-            console.error("❌ Failed to send auth response:", error.message);
-        }
     }
 
     async sendJWTToClient(sessionId, token) {
         for (const [clientId, ws] of this.webSocketClients) {
-            if (ws.readyState === 1) {
+            if (ws.readyState === ws.OPEN) {
+                console.log("✅ Sending JWT to client:", clientId);
                 ws.send(JSON.stringify({ token }));
                 ws.close();
                 this.webSocketClients.delete(clientId);

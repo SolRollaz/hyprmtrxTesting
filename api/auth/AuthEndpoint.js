@@ -32,7 +32,7 @@ class AuthEndpoint {
         this.webSocketClients = new Map();
     }
 
-    async waitForWalletConnectReady(maxWaitMs = 5000) {
+    async waitForWalletConnectReady(maxWaitMs = 15000) {
         const start = Date.now();
         while (!this.qrCodeAuth_NEW.core?.relayer.connected) {
             const elapsed = Date.now() - start;

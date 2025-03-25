@@ -32,6 +32,13 @@ class AuthEndpoint {
         this.webSocketClients = new Map();
     }
 
+    async waitForRelayConnection() {
+        if (!this.qrCodeAuth_NEW.core?.relayer.connected) {
+            console.warn("⏳ Waiting for WalletConnect relay to connect...");
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+    }
+
     async handleRequest(req, res) {
         if (!req.body.auth || req.body.auth !== "auth") {
             return res.status(400).json({ status: "failure", message: "Invalid or missing 'auth' parameter." });
@@ -46,6 +53,8 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
+            await this.waitForRelayConnection();
+
             const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
             if (qrCodeResult.status !== "success") {
                 return res.status(500).json({ status: "failure", message: qrCodeResult.message });
@@ -66,46 +75,47 @@ class AuthEndpoint {
     }
 
     async handleWebSocketConnection(ws) {
-    const clientId = Date.now().toString();
-    this.webSocketClients.set(clientId, ws);
-    console.log("✅ WebSocket Client Connected");
+        const clientId = Date.now().toString();
+        this.webSocketClients.set(clientId, ws);
+        console.log("✅ WebSocket Client Connected");
 
-    ws.on("message", async (message) => {
-        try {
-            const data = JSON.parse(message);
+        ws.on("message", async (message) => {
+            try {
+                const data = JSON.parse(message);
 
-            if (data.action === "ping") {
-                return ws.send(JSON.stringify({ type: "pong" }));
-            }
-
-            if (data.action === "authenticateUser") {
-                const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
-                if (qrCodeResult.status !== "success") {
-                    return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
+                if (data.action === "ping") {
+                    return ws.send(JSON.stringify({ type: "pong" }));
                 }
-                ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
 
-            } else if (data.action === "verifyAuthentication") {
-                const { walletAddress, signedMessage, authType, gameName } = data;
-                const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
-                this.sendAuthResponseToGame(ws, authResult);
+                if (data.action === "authenticateUser") {
+                    await this.waitForRelayConnection();
+
+                    const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
+                    if (qrCodeResult.status !== "success") {
+                        return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
+                    }
+                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
+
+                } else if (data.action === "verifyAuthentication") {
+                    const { walletAddress, signedMessage, authType, gameName } = data;
+                    const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
+                    this.sendAuthResponseToGame(ws, authResult);
+                }
+            } catch (error) {
+                console.error("❌ WebSocket processing error:", error.message);
+                ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
             }
-        } catch (error) {
-            console.error("❌ WebSocket processing error:", error.message);
-            ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
-        }
-    });
+        });
 
-    ws.on("close", () => {
-        console.log("❌ WebSocket Client Disconnected");
-        this.webSocketClients.delete(clientId);
-    });
+        ws.on("close", () => {
+            console.log("❌ WebSocket Client Disconnected");
+            this.webSocketClients.delete(clientId);
+        });
 
-    ws.on("error", (error) => {
-        console.error("⚠️ WebSocket Error:", error.message);
-    });
-}
-
+        ws.on("error", (error) => {
+            console.error("⚠️ WebSocket Error:", error.message);
+        });
+    }
 
     sendAuthResponseToGame(ws, authResult) {
         try {

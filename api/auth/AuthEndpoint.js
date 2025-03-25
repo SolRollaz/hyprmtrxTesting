@@ -66,41 +66,46 @@ class AuthEndpoint {
     }
 
     async handleWebSocketConnection(ws) {
-        const clientId = Date.now().toString();
-        this.webSocketClients.set(clientId, ws);
-        console.log("✅ WebSocket Client Connected");
+    const clientId = Date.now().toString();
+    this.webSocketClients.set(clientId, ws);
+    console.log("✅ WebSocket Client Connected");
 
-        ws.on("message", async (message) => {
-            try {
-                const data = JSON.parse(message);
+    ws.on("message", async (message) => {
+        try {
+            const data = JSON.parse(message);
 
-                if (data.action === "authenticateUser") {
-                    const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
-                    if (qrCodeResult.status !== "success") {
-                        return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
-                    }
-                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
-
-                } else if (data.action === "verifyAuthentication") {
-                    const { walletAddress, signedMessage, authType, gameName } = data;
-                    const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
-                    this.sendAuthResponseToGame(ws, authResult);
-                }
-            } catch (error) {
-                console.error("❌ WebSocket processing error:", error.message);
-                ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
+            if (data.action === "ping") {
+                return ws.send(JSON.stringify({ type: "pong" }));
             }
-        });
 
-        ws.on("close", () => {
-            console.log("❌ WebSocket Client Disconnected");
-            this.webSocketClients.delete(clientId);
-        });
+            if (data.action === "authenticateUser") {
+                const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
+                if (qrCodeResult.status !== "success") {
+                    return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
+                }
+                ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
 
-        ws.on("error", (error) => {
-            console.error("⚠️ WebSocket Error:", error.message);
-        });
-    }
+            } else if (data.action === "verifyAuthentication") {
+                const { walletAddress, signedMessage, authType, gameName } = data;
+                const authResult = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
+                this.sendAuthResponseToGame(ws, authResult);
+            }
+        } catch (error) {
+            console.error("❌ WebSocket processing error:", error.message);
+            ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
+        }
+    });
+
+    ws.on("close", () => {
+        console.log("❌ WebSocket Client Disconnected");
+        this.webSocketClients.delete(clientId);
+    });
+
+    ws.on("error", (error) => {
+        console.error("⚠️ WebSocket Error:", error.message);
+    });
+}
+
 
     sendAuthResponseToGame(ws, authResult) {
         try {

@@ -32,17 +32,6 @@ class AuthEndpoint {
         this.webSocketClients = new Map();
     }
 
-    async waitForWalletConnectReady(maxWaitMs = 15000) {
-        const start = Date.now();
-        while (!this.qrCodeAuth_NEW.core?.relayer.connected) {
-            const elapsed = Date.now() - start;
-            if (elapsed > maxWaitMs) {
-                throw new Error("WalletConnect not ready after timeout.");
-            }
-            await new Promise((resolve) => setTimeout(resolve, 250));
-        }
-    }
-
     async handleRequest(req, res) {
         if (!req.body.auth || req.body.auth !== "auth") {
             return res.status(400).json({ status: "failure", message: "Invalid or missing 'auth' parameter." });
@@ -57,8 +46,6 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
-            await this.waitForWalletConnectReady();
-
             const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
             if (qrCodeResult.status !== "success") {
                 return res.status(500).json({ status: "failure", message: qrCodeResult.message });
@@ -92,8 +79,6 @@ class AuthEndpoint {
                 }
 
                 if (data.action === "authenticateUser") {
-                    await this.waitForWalletConnectReady();
-
                     const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
                     if (qrCodeResult.status !== "success") {
                         return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));

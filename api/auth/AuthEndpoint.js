@@ -1,9 +1,11 @@
 import express from "express";
-import QRCodeAuth from "../../HVM/QRCode_Auth_new.js"; // ✅ THIS is the working class
+import QRCodeAuth from "../../HVM/QRCode_Auth_new.js"; // ✅ Your WalletConnect Core v2 class
 import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
 import fs from "fs";
 import path from "path";
+import MasterAuth from "../../HVM/MasterAuth.js"; // ✅ Wallet signature + JWT manager
+import SessionStore from "../../HVM/SessionStore.js"; // ✅ In-memory temporary store
 
 class AuthEndpoint {
     constructor() {
@@ -17,8 +19,9 @@ class AuthEndpoint {
 
         this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
 
-        this.qrCodeAuth = new QRCodeAuth(this.client, this.dbName, this.systemConfig); // ✅ WORKING INSTANCE
-        this.webSocketClients = new Map(); // ✅ WebSocket client store
+        this.qrCodeAuth = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
+        this.masterAuth = new MasterAuth(this.client, this.dbName);
+        this.webSocketClients = new Map(); // Active WebSocket connections
     }
 
     async handleRequest(req, res) {
@@ -38,7 +41,7 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
-            const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode(); // ✅ WORKING METHOD
+            const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
 
             if (qrCodeResult.status !== "success") {
                 console.error("❌ QR Code generation failed:", qrCodeResult.message);
@@ -46,7 +49,6 @@ class AuthEndpoint {
             }
 
             const qrCodePath = qrCodeResult.qr_code_path;
-
             if (!fs.existsSync(qrCodePath)) {
                 console.error("❌ QR Code file not found at path:", qrCodePath);
                 return res.status(500).json({ status: "failure", message: "QR Code file not found." });
@@ -74,7 +76,6 @@ class AuthEndpoint {
                 console.log("📩 WebSocket Received:", data);
 
                 if (data.action === "authenticateUser") {
-                    console.log("⚡ Generating QR Code...");
                     const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
 
                     if (qrCodeResult.status !== "success") {
@@ -82,10 +83,29 @@ class AuthEndpoint {
                         return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
                     }
 
-                    ws.send(JSON.stringify({ qrCodeUrl: qrCodeResult.qrCodeUrl }));
+                    ws.send(JSON.stringify({
+                        qrCodeUrl: qrCodeResult.qrCodeUrl,
+                        sessionId: qrCodeResult.sessionId
+                    }));
+
+                } else if (data.action === "verifyAuthentication") {
+                    const { walletAddress, signedMessage, authType, gameName } = data;
+
+                    const authResult = await this.masterAuth.verifySignedMessage(
+                        walletAddress,
+                        signedMessage,
+                        authType,
+                        gameName
+                    );
+
+                    if (authResult.status === "success") {
+                        SessionStore.set(authResult.token, walletAddress); // ✅ Store JWT + walletAddress in session
+                    }
+
+                    this.sendAuthResponseToGame(ws, authResult);
                 }
             } catch (error) {
-                console.error("❌ Error processing WebSocket message:", error);
+                console.error("❌ WebSocket processing error:", error);
                 ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
             }
         });
@@ -100,10 +120,24 @@ class AuthEndpoint {
         });
     }
 
+    sendAuthResponseToGame(ws, authResult) {
+        try {
+            const responsePayload = {
+                status: authResult.status,
+                message: authResult.message,
+                userName: authResult.userName || null,
+                token: authResult.token || null,
+            };
+            ws.send(JSON.stringify(responsePayload));
+            console.log("✅ Sent authentication response to game:", responsePayload);
+        } catch (error) {
+            console.error("❌ Error sending authentication response to game:", error.message);
+        }
+    }
+
     async sendJWTToClient(sessionId, token) {
         for (const [clientId, ws] of this.webSocketClients) {
             if (ws.readyState === ws.OPEN) {
-                console.log("✅ Sending JWT to client:", clientId);
                 ws.send(JSON.stringify({ token }));
                 ws.close();
                 this.webSocketClients.delete(clientId);

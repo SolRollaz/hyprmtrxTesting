@@ -1,11 +1,9 @@
 import express from "express";
-import QRCodeAuth from "../../HVM/QRCode_Auth_new.js"; // ✅ Your WalletConnect Core v2 class
+import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
 import SystemConfig from "../../systemConfig.js";
 import { MongoClient } from "mongodb";
-import fs from "fs";
-import path from "path";
-import MasterAuth from "../../HVM/MasterAuth.js"; // ✅ Wallet signature + JWT manager
-import SessionStore from "../../HVM/SessionStore.js"; // ✅ In-memory temporary store
+import MasterAuth from "../../HVM/MasterAuth.js";
+import SessionStore from "../../HVM/SessionStore.js";
 
 class AuthEndpoint {
     constructor() {
@@ -32,15 +30,6 @@ class AuthEndpoint {
         }
 
         try {
-            return await this.handleQRCodeRequest(res);
-        } catch (error) {
-            console.error("❌ Error handling request:", error.message);
-            return res.status(500).json({ status: "failure", message: "Internal server error." });
-        }
-    }
-
-    async handleQRCodeRequest(res) {
-        try {
             const qrCodeResult = await this.qrCodeAuth.generateAuthenticationQRCode();
 
             if (qrCodeResult.status !== "success") {
@@ -48,17 +37,13 @@ class AuthEndpoint {
                 return res.status(500).json({ status: "failure", message: qrCodeResult.message });
             }
 
-            const qrCodePath = qrCodeResult.qr_code_path;
-            if (!fs.existsSync(qrCodePath)) {
-                console.error("❌ QR Code file not found at path:", qrCodePath);
-                return res.status(500).json({ status: "failure", message: "QR Code file not found." });
-            }
+            return res.status(200).json({
+                status: "success",
+                qrCodeBase64: qrCodeResult.qrCodeBase64,
+                sessionId: qrCodeResult.sessionId,
+                walletConnectUri: qrCodeResult.walletConnectUri
+            });
 
-            console.log(`✅ Streaming QR Code from path: ${qrCodePath}`);
-            res.setHeader("Content-Type", "image/png");
-            res.setHeader("Content-Disposition", `inline; filename=${path.basename(qrCodePath)}`);
-            const qrStream = fs.createReadStream(qrCodePath);
-            qrStream.pipe(res);
         } catch (error) {
             console.error("❌ Error generating QR code:", error.message);
             return res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
@@ -84,8 +69,10 @@ class AuthEndpoint {
                     }
 
                     ws.send(JSON.stringify({
-                        qrCodeUrl: qrCodeResult.qrCodeUrl,
-                        sessionId: qrCodeResult.sessionId
+                        status: "success",
+                        qrCodeBase64: qrCodeResult.qrCodeBase64,
+                        sessionId: qrCodeResult.sessionId,
+                        walletConnectUri: qrCodeResult.walletConnectUri
                     }));
 
                 } else if (data.action === "verifyAuthentication") {
@@ -99,7 +86,7 @@ class AuthEndpoint {
                     );
 
                     if (authResult.status === "success") {
-                        SessionStore.set(authResult.token, walletAddress); // ✅ Store JWT + walletAddress in session
+                        SessionStore.set(authResult.token, walletAddress); // ✅ Store JWT + walletAddress
                     }
 
                     this.sendAuthResponseToGame(ws, authResult);

@@ -16,12 +16,22 @@ class AuthEndpoint {
 
         this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
         this.qrCodeAuth_NEW = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
-        this.webSocketClients = new Map(); // Store WebSocket connections
+        this.webSocketClients = new Map();
+    }
+
+    async waitForWalletConnectReady(maxMs = 10000) {
+        const start = Date.now();
+        while (!this.qrCodeAuth_NEW.core?.relayer?.connected) {
+            const elapsed = Date.now() - start;
+            if (elapsed >= maxMs) {
+                throw new Error("WalletConnect relay did not connect in time.");
+            }
+            await new Promise(resolve => setTimeout(resolve, 250));
+        }
     }
 
     async handleRequest(req, res) {
         console.log("📩 Incoming Auth Request:", req.body);
-
         if (!req.body.auth || req.body.auth !== "auth") {
             return res.status(400).json({ status: "failure", message: "Invalid or missing 'auth' parameter." });
         }
@@ -36,6 +46,8 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
+            await this.waitForWalletConnectReady();
+
             const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
 
             if (qrCodeResult.status !== "success") {
@@ -55,7 +67,7 @@ class AuthEndpoint {
             res.setHeader("Content-Disposition", `inline; filename=${path.basename(qrCodePath)}`);
             fs.createReadStream(qrCodePath).pipe(res);
         } catch (error) {
-            console.error("❌ Error generating QR code:", error.message);
+            console.error("❌ QR generation error:", error.message);
             return res.status(500).json({ status: "failure", message: "Failed to generate QR code." });
         }
     }
@@ -75,7 +87,8 @@ class AuthEndpoint {
                 }
 
                 if (data.action === "authenticateUser") {
-                    console.log("⚡ Generating QR Code via WalletConnect v2...");
+                    await this.waitForWalletConnectReady();
+
                     const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
 
                     if (qrCodeResult.status !== "success") {
@@ -90,7 +103,7 @@ class AuthEndpoint {
                     }));
                 }
             } catch (error) {
-                console.error("❌ Error processing WebSocket message:", error);
+                console.error("❌ WebSocket message error:", error.message);
                 ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
             }
         });
@@ -101,7 +114,7 @@ class AuthEndpoint {
         });
 
         ws.on("error", (error) => {
-            console.error("⚠️ WebSocket Error:", error);
+            console.error("⚠️ WebSocket Error:", error.message);
         });
     }
 

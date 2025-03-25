@@ -46,12 +46,12 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
-            const qrCodeResult = await this.qrCodeAuth_NEW.generateAuthenticationQRCode();
+            const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
             if (qrCodeResult.status !== "success") {
                 return res.status(500).json({ status: "failure", message: qrCodeResult.message });
             }
 
-            const qrCodePath = qrCodeResult.qr_code_path;
+            const qrCodePath = path.join(process.cwd(), "QR_Codes", `${qrCodeResult.sessionId}.png`);
             if (!fs.existsSync(qrCodePath)) {
                 return res.status(500).json({ status: "failure", message: "QR Code file not found." });
             }
@@ -75,7 +75,7 @@ class AuthEndpoint {
                 const data = JSON.parse(message);
 
                 if (data.action === "authenticateUser") {
-                    const qrCodeResult = await this.qrCodeAuth_NEW.generateAuthenticationQRCode();
+                    const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
                     if (qrCodeResult.status !== "success") {
                         return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
                     }

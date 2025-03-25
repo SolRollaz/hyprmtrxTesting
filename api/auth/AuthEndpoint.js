@@ -19,15 +19,20 @@ class AuthEndpoint {
         this.webSocketClients = new Map();
     }
 
-    async waitForWalletConnectReady(maxMs = 10000) {
-        const start = Date.now();
-        while (!this.qrCodeAuth_NEW.core?.relayer?.connected) {
-            const elapsed = Date.now() - start;
-            if (elapsed >= maxMs) {
-                throw new Error("WalletConnect relay did not connect in time.");
+    async tryGenerateQRCodeWithRetry(attempts = 3, delayMs = 1000) {
+        let lastError = null;
+        for (let i = 1; i <= attempts; i++) {
+            try {
+                const result = await this.qrCodeAuth_NEW.generateQRCode();
+                if (result.status === "success") return result;
+                console.warn(`⚠️ Attempt ${i} failed:`, result.message);
+            } catch (err) {
+                lastError = err;
+                console.warn(`⚠️ Attempt ${i} threw:`, err.message);
             }
-            await new Promise(resolve => setTimeout(resolve, 250));
+            await new Promise(resolve => setTimeout(resolve, delayMs));
         }
+        throw lastError || new Error("QR code generation failed after retries.");
     }
 
     async handleRequest(req, res) {
@@ -46,17 +51,9 @@ class AuthEndpoint {
 
     async handleQRCodeRequest(res) {
         try {
-            await this.waitForWalletConnectReady();
-
-            const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
-
-            if (qrCodeResult.status !== "success") {
-                console.error("❌ QR Code generation failed:", qrCodeResult.message);
-                return res.status(500).json({ status: "failure", message: qrCodeResult.message });
-            }
+            const qrCodeResult = await this.tryGenerateQRCodeWithRetry();
 
             const qrCodePath = path.join(process.cwd(), "QR_Codes", `${qrCodeResult.sessionId}.png`);
-
             if (!fs.existsSync(qrCodePath)) {
                 console.error("❌ QR Code file not found at path:", qrCodePath);
                 return res.status(500).json({ status: "failure", message: "QR Code file not found." });
@@ -87,14 +84,7 @@ class AuthEndpoint {
                 }
 
                 if (data.action === "authenticateUser") {
-                    await this.waitForWalletConnectReady();
-
-                    const qrCodeResult = await this.qrCodeAuth_NEW.generateQRCode();
-
-                    if (qrCodeResult.status !== "success") {
-                        console.error("❌ QR Code generation failed:", qrCodeResult.message);
-                        return ws.send(JSON.stringify({ error: "Failed to generate QR Code" }));
-                    }
+                    const qrCodeResult = await this.tryGenerateQRCodeWithRetry();
 
                     ws.send(JSON.stringify({
                         qrCodeUrl: qrCodeResult.qrCodeUrl,
@@ -104,7 +94,7 @@ class AuthEndpoint {
                 }
             } catch (error) {
                 console.error("❌ WebSocket message error:", error.message);
-                ws.send(JSON.stringify({ error: "Invalid WebSocket message" }));
+                ws.send(JSON.stringify({ error: "QR Code generation failed." }));
             }
         });
 

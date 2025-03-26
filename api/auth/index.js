@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import AuthEndpoint from "./AuthEndpoint.js";
 import SessionStore from "../../HVM/SessionStore.js";
-import { isDomainWhitelisted, validateApiKey } from "./authMiddleware.js";
+import { isDomainWhitelisted, validateApiKey } from "../../HVM/authMiddleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

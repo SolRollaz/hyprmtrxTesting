@@ -20,7 +20,7 @@ const server = http.createServer(app);
 const port = 4000;
 const authAPI = new AuthEndpoint();
 
-// ✅ Dynamic origin check (strict)
+// ✅ Strict CORS with domain or API key
 app.use(async (req, res, next) => {
   const origin = req.headers.origin;
   const apiKey = req.headers["x-api-key"];
@@ -42,7 +42,7 @@ app.use(async (req, res, next) => {
   return res.status(403).json({ status: "failure", message: "Unauthorized origin or missing API key" });
 });
 
-app.use(express.json());
+app.use(express.json({ limit: "1kb" }));
 app.use(express.static("public"));
 
 // ✅ Rate limiter
@@ -54,7 +54,7 @@ const authLimiter = rateLimit({
   legacyHeaders: false
 });
 
-// ✅ Auth routes
+// ✅ Auth main route
 app.post(["/", "/api/auth/"], authLimiter, async (req, res) => {
   try {
     await authAPI.handleRequest(req, res);
@@ -84,29 +84,22 @@ app.post("/api/verify-signature", async (req, res) => {
   }
 });
 
-app.post("/api/check-username", async (req, res) => {
-  const { walletAddress, userName } = req.body;
-  if (!walletAddress || !userName) {
-    return res.status(400).json({ status: "failure", message: "Missing walletAddress or userName" });
-  }
-
-  try {
-    await authAPI.checkUserName.handleREST(req, res);
-  } catch (e) {
-    console.error("❌ /api/check-username:", e);
-    res.status(500).json({ status: "failure", message: "Server error" });
-  }
-});
-
 app.get("/.well-known/walletconnect.txt", (req, res) => {
   res.sendFile(path.resolve(process.cwd(), "public", "walletconnect.txt"));
 });
 
-// ✅ WebSocket support
+// ✅ WebSocket origin check
 const wss = new WebSocketServer({ server });
-wss.on("connection", (ws) => authAPI.handleWebSocketConnection(ws));
+wss.on("connection", (ws, req) => {
+  const origin = req.headers.origin;
+  if (!isDomainWhitelisted(origin)) {
+    ws.close(1008, "Forbidden origin");
+    return;
+  }
+  authAPI.handleWebSocketConnection(ws);
+});
 
-// ✅ Session cleanup every 5 minutes
+// ✅ Session cleanup
 setInterval(() => {
   SessionStore.clearExpired();
 }, 5 * 60 * 1000);

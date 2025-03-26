@@ -1,3 +1,4 @@
+// File: /api/auth/AuthEndpoint.js
 import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
 import MasterAuth from "../../HVM/MasterAuth.js";
 import SessionStore from "../../HVM/SessionStore.js";
@@ -52,6 +53,7 @@ class AuthEndpoint {
     ws.on("message", async (msg) => {
       try {
         const data = JSON.parse(msg);
+
         if (data.action === "authenticateUser") {
           const qr = await this.qrCodeAuth.generateAuthenticationQRCode();
 
@@ -75,7 +77,7 @@ class AuthEndpoint {
             SessionStore.set(auth.token, walletAddress);
           }
 
-          this.sendAuthResponseToGame(ws, auth);
+          this.sendAuthResponse(ws, auth);
         }
 
       } catch (err) {
@@ -88,11 +90,10 @@ class AuthEndpoint {
     ws.on("error", (e) => console.error("⚠️ WebSocket error:", e));
   }
 
-  sendAuthResponseToGame(ws, authResult) {
+  sendAuthResponse(ws, authResult) {
     const payload = {
       status: authResult.status,
       message: authResult.message,
-      userName: authResult.userName || null,
       token: authResult.token || null,
     };
     ws.send(JSON.stringify(payload));

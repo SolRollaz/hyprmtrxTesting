@@ -15,7 +15,8 @@ class AuthEndpoint {
             throw new Error("❌ Mongo URI or DB Name is not defined.");
         }
 
-        this.client = new MongoClient(this.mongoUri, { useUnifiedTopology: true });
+        this.client = new MongoClient(this.mongoUri);
+
 
         this.qrCodeAuth = new QRCodeAuth(this.client, this.dbName, this.systemConfig);
         this.masterAuth = new MasterAuth(this.client, this.dbName);

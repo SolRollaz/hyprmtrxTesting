@@ -1,3 +1,4 @@
+// File: /api/auth/authMiddleware.js
 import dotenv from "dotenv";
 import { MongoClient } from "mongodb";
 
@@ -12,8 +13,8 @@ const client = new MongoClient(mongoUri, { useUnifiedTopology: true });
  * ✅ List of whitelisted domains that can bypass API key authentication.
  */
 const WHITELISTED_DOMAINS = [
-    "https://hyprmtrx.com",
-    "https://trustedpartner.com"
+  "https://hyprmtrx.com",
+  "https://hyprmtrx.xyz"
 ];
 
 /**
@@ -22,7 +23,7 @@ const WHITELISTED_DOMAINS = [
  * @returns {boolean} - True if the domain is whitelisted.
  */
 export function isDomainWhitelisted(origin) {
-    return WHITELISTED_DOMAINS.includes(origin);
+  return WHITELISTED_DOMAINS.includes(origin);
 }
 
 /**
@@ -31,21 +32,21 @@ export function isDomainWhitelisted(origin) {
  * @returns {Promise<boolean>} - True if the API key is valid.
  */
 export async function validateApiKey(apiKey) {
-    if (!apiKey) return false;
+  if (!apiKey) return false;
 
-    try {
-        await client.connect();
-        const db = client.db(dbName);
-        const apiKeyCollection = db.collection("api_keys");
+  try {
+    await client.connect();
+    const db = client.db(dbName);
+    const apiKeyCollection = db.collection("api_keys");
 
-        // ✅ Check if API key exists in the database
-        const existingKey = await apiKeyCollection.findOne({ key: apiKey });
+    // ✅ Check if API key exists in the database
+    const existingKey = await apiKeyCollection.findOne({ key: apiKey });
 
-        return !!existingKey; // ✅ Return true if key is found, otherwise false
-    } catch (error) {
-        console.error("❌ Error validating API key:", error.message);
-        return false;
-    } finally {
-        await client.close();
-    }
+    return !!existingKey;
+  } catch (error) {
+    console.error("❌ Error validating API key:", error.message);
+    return false;
+  } finally {
+    await client.close();
+  }
 }

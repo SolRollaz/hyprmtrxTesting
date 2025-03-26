@@ -11,8 +11,10 @@ class QRCodeAuth {
     this.client = client;
     this.dbName = dbName;
     this.systemConfig = systemConfig;
-    this.sessions = new Map(); // Tracks pairing sessions
-    this.activeSessions = new Map(); // Tracks connected sessions
+
+    this.sessions = new Map();       // Tracks pairing URIs
+    this.activeSessions = new Map(); // Tracks approval promises
+    this.activePairing = null;       // Tracks live pairing
 
     this.signClient = null;
     this.initializeSignClient();
@@ -37,6 +39,23 @@ class QRCodeAuth {
     try {
       console.log("🚀 Starting QR code generation...");
 
+      // ✅ Clean up any previous pairing to prevent dangling sessions
+      if (this.activePairing) {
+        try {
+          await this.signClient.disconnect({
+            topic: this.activePairing.topic,
+            reason: {
+              code: 6000,
+              message: "Replacing previous WalletConnect pairing",
+            },
+          });
+          console.log("🧹 Cleaned up previous pairing.");
+        } catch (err) {
+          console.warn("⚠️ Failed to disconnect old pairing:", err.message);
+        }
+        this.activePairing = null;
+      }
+
       const uniqueId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const sessionId = `session_${uniqueId}`;
 
@@ -56,12 +75,14 @@ class QRCodeAuth {
         },
       });
 
+      // ✅ Store current pairing topic
+      const pairings = this.signClient.pairing.getPairings();
+      this.activePairing = pairings[pairings.length - 1];
+
       const qrCodeBase64 = await qrCode.toDataURL(uri);
 
-      // Hold approval promise to wait on scan
+      // ✅ Track both approval flow and basic session data
       this.activeSessions.set(sessionId, { approval });
-
-      // Track this session
       this.sessions.set(sessionId, { uri, status: "pending" });
 
       return {
@@ -86,7 +107,7 @@ class QRCodeAuth {
       console.log(`⏳ Waiting for wallet to scan QR... [Session: ${sessionId}]`);
       const { approval } = this.activeSessions.get(sessionId);
 
-      const session = await approval(); // Wallet connection via QR scan
+      const session = await approval(); // Wait for wallet approval
       console.log(`✅ Wallet connected! [Session: ${sessionId}]`, session);
 
       return { status: "success", session };

@@ -103,6 +103,8 @@
 
     "start": "node Server.js",
 
+    "dev" : "node ./api/auth/index.js",
+
     "test": "echo \"Error: no test specified\" && exit 1"
 
   },

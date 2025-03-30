@@ -1,23 +1,130 @@
+// File: /HVM/schemas/gameInfoSchema.js
 import mongoose from "mongoose";
 
-const gameDataSchema = new mongoose.Schema({
-  game_id: { type: String, required: true, index: true },
-  data: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
+// 🔥 Define Schema for Game Registration
+const gameInfoSchema = new mongoose.Schema({
+  game_name: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
+    index: true
   },
-  updated_at: {
+  developer_email: {
+    type: String,
+    required: true,
+    trim: true,
+    lowercase: true,
+    validate: {
+      validator: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
+      message: "Invalid email format!"
+    },
+    index: true
+  },
+  description: {
+    type: String,
+    default: "No description provided.",
+    trim: true
+  },
+  game_logo_path: {
+    type: String,
+    required: true, // ✅ Ensure logo is uploaded
+    trim: true
+  },
+  game_banner_path: {
+    type: String,
+    required: true, // ✅ Ensure banner is uploaded
+    trim: true
+  },
+  registered_by: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  status: {
+    type: String,
+    enum: ["building", "testing", "fully launched"],
+    default: "building"
+  },
+  networks: {
+    type: [String],
+    required: true,
+    enum: ["base", "avax", "bnb", "dag"]
+  },
+  game_engine: {
+    type: String,
+    required: true,
+    trim: true
+  },
+  game_platforms: {
+    type: [String],
+    required: true,
+    enum: ["steam", "android", "apple", "ps5", "nintendo", "webgl", "pc", "xbox", "meta_quest", "vr", "linux", "chromeos", "ios_arcade"]
+  },
+  created_at: {
     type: Date,
     default: Date.now
+  },
+  last_updated: {
+    type: Date,
+    default: Date.now
+  },
+  rewards_pools: {
+    type: [String], // ✅ Web3 wallet addresses, not IDs
+    default: []
+  },
+  prize_pools: {
+    type: [String], // ✅ Web3 wallet addresses, not IDs
+    default: []
+  },
+  rewards_token_address: {
+    type: String, // ✅ Web3 token address
+    trim: true
+  },
+  rewards_token_networks: {
+    type: [String], // ✅ Networks where the rewards token exists
+    required: true,
+    enum: ["base", "avax", "bnb", "dag"]
+  },
+  accepted_tokens: {
+    type: [String], // ✅ Manually added token contract addresses
+    default: []
+  },
+  auto_accept_liquid_tokens: {
+    type: Boolean, // ✅ Enable auto-acceptance of liquid tokens
+    default: false
+  },
+  min_liquidity_volume: {
+    type: Number, // ✅ Minimum daily trading volume requirement
+    default: 10000,
+    min: 1000
+  },
+  native_quarters_balance: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  hyprmtrx_apis: {
+    web3_starter: { type: Boolean, default: false },
+    web3_max: { type: Boolean, default: false },
+    GameFi: { type: Boolean, default: false },
+    AI_Agent: { type: Boolean, default: false },
+    max_tps: { type: Boolean, default: false },
+    arbitrage: { type: Boolean, default: false },
+    mims: { type: Boolean, default: false },
+    multichain_asset: { type: Boolean, default: false },
+    gameQuarters: { type: Boolean, default: false },
+    hgtp_token: { type: Boolean, default: false }
   }
 });
 
-// ✅ Auto-update `updated_at` on save
-gameDataSchema.pre("save", function (next) {
-  this.updated_at = Date.now();
+// ✅ Auto-update `last_updated` when the game is modified
+gameInfoSchema.pre("save", function (next) {
+  this.last_updated = Date.now();
   next();
 });
 
-const GameData = mongoose.model("GameData", gameDataSchema);
+const GameInfo = mongoose.model("GameInfo", gameInfoSchema);
 
-export default GameData;
+export default GameInfo;

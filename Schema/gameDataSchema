@@ -1,4 +1,4 @@
-// File: /HVM/schemas/gameInfoSchema.js
+// File: /schema/gameDataSchema.js
 import mongoose from "mongoose";
 
 // 🔥 Define Schema for Game Registration
@@ -29,12 +29,12 @@ const gameInfoSchema = new mongoose.Schema({
   },
   game_logo_path: {
     type: String,
-    required: true, // ✅ Ensure logo is uploaded
+    required: true,
     trim: true
   },
   game_banner_path: {
     type: String,
-    required: true, // ✅ Ensure banner is uploaded
+    required: true,
     trim: true
   },
   registered_by: {
@@ -60,7 +60,21 @@ const gameInfoSchema = new mongoose.Schema({
   game_platforms: {
     type: [String],
     required: true,
-    enum: ["steam", "android", "apple", "ps5", "nintendo", "webgl", "pc", "xbox", "meta_quest", "vr", "linux", "chromeos", "ios_arcade"]
+    enum: [
+      "steam",
+      "android",
+      "apple",
+      "ps5",
+      "nintendo",
+      "webgl",
+      "pc",
+      "xbox",
+      "meta_quest",
+      "vr",
+      "linux",
+      "chromeos",
+      "ios_arcade"
+    ]
   },
   created_at: {
     type: Date,
@@ -71,32 +85,32 @@ const gameInfoSchema = new mongoose.Schema({
     default: Date.now
   },
   rewards_pools: {
-    type: [String], // ✅ Web3 wallet addresses, not IDs
+    type: [String],
     default: []
   },
   prize_pools: {
-    type: [String], // ✅ Web3 wallet addresses, not IDs
+    type: [String],
     default: []
   },
   rewards_token_address: {
-    type: String, // ✅ Web3 token address
+    type: String,
     trim: true
   },
   rewards_token_networks: {
-    type: [String], // ✅ Networks where the rewards token exists
+    type: [String],
     required: true,
     enum: ["base", "avax", "bnb", "dag"]
   },
   accepted_tokens: {
-    type: [String], // ✅ Manually added token contract addresses
+    type: [String],
     default: []
   },
   auto_accept_liquid_tokens: {
-    type: Boolean, // ✅ Enable auto-acceptance of liquid tokens
+    type: Boolean,
     default: false
   },
   min_liquidity_volume: {
-    type: Number, // ✅ Minimum daily trading volume requirement
+    type: Number,
     default: 10000,
     min: 1000
   },
@@ -119,12 +133,11 @@ const gameInfoSchema = new mongoose.Schema({
   }
 });
 
-// ✅ Auto-update `last_updated` when the game is modified
+// ✅ Auto-update `last_updated`
 gameInfoSchema.pre("save", function (next) {
   this.last_updated = Date.now();
   next();
 });
 
 const GameInfo = mongoose.model("GameInfo", gameInfoSchema);
-
 export default GameInfo;

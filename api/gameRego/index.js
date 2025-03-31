@@ -58,7 +58,7 @@ app.post(["/", "/api/game/register"], registrationLimiter, async (req, res) => {
 
 app.get("/", (req, res) => res.status(200).json({ message: "Game Registration API is working!" }));
 
-// ✅ WebSocket support (optional for future expansion)
+// ✅ WebSocket support (optional, can be expanded)
 const wss = new WebSocketServer({ server });
 wss.on("connection", (ws, req) => {
   const origin = req.headers.origin;

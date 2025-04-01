@@ -19,9 +19,9 @@ class GameRegistration {
   async handleRegistration(req, res) {
     try {
       const gameData = req.body;
+
       const requiredFields = [
         "game_name",
-        "developer_email",
         "networks",
         "game_engine",
         "game_platforms"
@@ -57,16 +57,27 @@ class GameRegistration {
         ? this.saveImage(gameData.game_banner, "banner", gameData.game_name)
         : "";
 
+      // 🔄 Ensure arrays are actually arrays even if user sends comma-separated strings
+      const normalizeArray = (input) =>
+        Array.isArray(input)
+          ? input
+          : typeof input === "string"
+            ? input.split(",").map((s) => s.trim()).filter(Boolean)
+            : [];
+
       const newGame = new GameInfo({
         ...gameData,
         game_name: gameData.game_name.toLowerCase(),
         game_logo_path: gameLogoPath,
         game_banner_path: gameBannerPath,
         registered_by: gameData.registered_by,
-        rewards_token_address: gameData.rewards_token_address || "",
-        rewards_token_networks: gameData.rewards_token_networks || [],
-        accepted_tokens: gameData.accepted_tokens || [],
-        auto_accept_liquid_tokens: gameData.auto_accept_liquid_tokens || false,
+        networks: normalizeArray(gameData.networks),
+        game_platforms: normalizeArray(gameData.game_platforms),
+        rewards_token_networks: normalizeArray(gameData.rewards_token_networks),
+        accepted_tokens: normalizeArray(gameData.accepted_tokens),
+        rewards_pools: normalizeArray(gameData.rewards_pools),
+        prize_pools: normalizeArray(gameData.prize_pools),
+        auto_accept_liquid_tokens: !!gameData.auto_accept_liquid_tokens,
         min_liquidity_volume: gameData.min_liquidity_volume || 10000,
         created_at: new Date(),
         last_updated: new Date()
@@ -90,7 +101,7 @@ class GameRegistration {
 
   saveImage(base64Data, type, gameName) {
     try {
-      const fileName = `${gameName.toLowerCase().replace(/\\s+/g, "_")}_${type}.jpg`;
+      const fileName = `${gameName.toLowerCase().replace(/\s+/g, "_")}_${type}.jpg`;
       const filePath = path.join(imageStorageDir, fileName);
       fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
       return filePath;

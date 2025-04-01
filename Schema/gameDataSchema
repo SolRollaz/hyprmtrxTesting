@@ -11,17 +11,6 @@ const gameInfoSchema = new mongoose.Schema({
     lowercase: true,
     index: true
   },
-  developer_email: {
-    type: String,
-    required: true,
-    trim: true,
-    lowercase: true,
-    validate: {
-      validator: (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-      message: "Invalid email format!"
-    },
-    index: true
-  },
   description: {
     type: String,
     default: "No description provided.",
@@ -41,11 +30,6 @@ const gameInfoSchema = new mongoose.Schema({
     type: String,
     required: true,
     trim: true
-  },
-  status: {
-    type: String,
-    enum: ["building", "testing", "fully launched"],
-    default: "building"
   },
   networks: {
     type: [String],

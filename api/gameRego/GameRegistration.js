@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import GameInfo from "../../schema/gameDataSchema.js";
-import GameKeys from "../../schema/gameKeysSchema.js";
+import GameInfo from "../../Schema/gameDataSchema.js";
+import GameKeys from "../../Schema/gameKeysSchema.js";
 import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);

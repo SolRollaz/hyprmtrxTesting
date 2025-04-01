@@ -6,6 +6,8 @@ import rateLimit from "express-rate-limit";
 import http from "http";
 import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
+import multer from "multer";
+import fs from "fs";
 import GameRegistration from "./GameRegistration.js";
 import SessionStore from "../../HVM/SessionStore.js";
 import { isDomainWhitelisted } from "../../HVM/authMiddleware.js";
@@ -37,6 +39,24 @@ app.use(async (req, res, next) => {
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static("public"));
 
+// ✅ Multer config for file upload handling
+const uploadDir = path.resolve("./gameImages");
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + path.extname(file.originalname);
+    cb(null, file.fieldname + "_" + uniqueSuffix);
+  }
+});
+
+const upload = multer({ storage });
+
 // ✅ Rate limiter
 const registrationLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -47,14 +67,22 @@ const registrationLimiter = rateLimit({
 });
 
 // ✅ Game Registration route
-app.post(["/", "/api/game/register"], registrationLimiter, async (req, res) => {
-  try {
-    await gameRegistrationAPI.handleRegistration(req, res);
-  } catch (e) {
-    console.error("❌ /api/game/register:", e);
-    res.status(500).json({ error: e.message });
+app.post(
+  ["/", "/api/game/register"],
+  registrationLimiter,
+  upload.fields([
+    { name: "game_logo", maxCount: 1 },
+    { name: "game_banner", maxCount: 1 }
+  ]),
+  async (req, res) => {
+    try {
+      await gameRegistrationAPI.handleRegistration(req, res);
+    } catch (e) {
+      console.error("❌ /api/game/register:", e);
+      res.status(500).json({ error: e.message });
+    }
   }
-});
+);
 
 app.get("/", (req, res) => res.status(200).json({ message: "Game Registration API is working!" }));
 

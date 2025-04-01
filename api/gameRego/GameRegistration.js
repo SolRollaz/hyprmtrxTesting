@@ -1,8 +1,8 @@
-// File: /api/game_registration/GameRegistration.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import GameInfo from "../../Schema/gameDataSchema.js";
+import GameInfo from "../../schema/gameDataSchema.js";
+import GameKeys from "../../schema/gameKeysSchema.js";
 import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +57,6 @@ class GameRegistration {
         ? this.saveImage(gameData.game_banner, "banner", gameData.game_name)
         : "";
 
-      // 🔄 Ensure arrays are actually arrays even if user sends comma-separated strings
       const normalizeArray = (input) =>
         Array.isArray(input)
           ? input
@@ -84,6 +83,14 @@ class GameRegistration {
       });
 
       await newGame.save();
+
+      // 🔐 Save hashed gameKey
+      const gameKeyEntry = new GameKeys({
+        game_name: gameData.game_name.toLowerCase(),
+        secret_key: gameKey
+      });
+
+      await gameKeyEntry.save();
 
       res.status(201).json({
         status: "success",

@@ -1,18 +1,19 @@
+// File: /api/game_registration/GameRegistration.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import GameInfo from "../../Schema/gameDataSchema.js";
-import GameKeys from "../../Schema/gameKeysSchema.js"; // This is where the game key schema is imported
+import GameKeys from "../../Schema/gameKeysSchema.js";
 import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const imageStorageDir = path.join(__dirname, "Game_Images");
+const imageStorageRoot = path.join(__dirname, "../../gameImages"); // Root folder
 
 class GameRegistration {
   constructor() {
-    if (!fs.existsSync(imageStorageDir)) {
-      fs.mkdirSync(imageStorageDir, { recursive: true });
+    if (!fs.existsSync(imageStorageRoot)) {
+      fs.mkdirSync(imageStorageRoot, { recursive: true });
     }
   }
 
@@ -24,7 +25,8 @@ class GameRegistration {
         "game_name",
         "networks",
         "game_engine",
-        "game_platforms"
+        "game_platforms",
+        "registered_by"
       ];
 
       for (const field of requiredFields) {
@@ -36,9 +38,8 @@ class GameRegistration {
         }
       }
 
-      const existingGame = await GameInfo.findOne({
-        game_name: gameData.game_name.toLowerCase()
-      });
+      const gameNameSlug = gameData.game_name.toLowerCase().trim();
+      const existingGame = await GameInfo.findOne({ game_name: gameNameSlug });
 
       if (existingGame) {
         return res.status(400).json({
@@ -47,44 +48,61 @@ class GameRegistration {
         });
       }
 
-      // 🧠 Generate a new game key
-      const gameKey = uuidv4(); // Create a unique key
+      const gameFolder = path.join(imageStorageRoot, gameNameSlug);
+      if (!fs.existsSync(gameFolder)) {
+        fs.mkdirSync(gameFolder, { recursive: true });
+      }
 
-      // Save the new game key into GameKeys collection (hashed)
-      const gameKeyEntry = new GameKeys({
-        game_name: gameData.game_name.toLowerCase(),
-        secret_key: gameKey
-      });
+      // Handle uploaded files
+      const logoFile = req.files?.game_logo?.[0];
+      const bannerFile = req.files?.game_banner?.[0];
 
-      await gameKeyEntry.save(); // Save it to the DB
-
-      // 🖼️ Handle image upload (if applicable)
-      const gameLogoPath = gameData.game_logo
-        ? this.saveImage(gameData.game_logo, "logo", gameData.game_name)
+      const logoPath = logoFile
+        ? this.saveImage(logoFile.path, "logo", gameNameSlug, gameFolder)
+        : "";
+      const bannerPath = bannerFile
+        ? this.saveImage(bannerFile.path, "banner", gameNameSlug, gameFolder)
         : "";
 
-      const gameBannerPath = gameData.game_banner
-        ? this.saveImage(gameData.game_banner, "banner", gameData.game_name)
-        : "";
+      const normalizeArray = (input) =>
+        Array.isArray(input)
+          ? input
+          : typeof input === "string"
+            ? input.split(",").map((s) => s.trim()).filter(Boolean)
+            : [];
 
-      // Create a new GameInfo document and save it
       const newGame = new GameInfo({
         ...gameData,
-        game_name: gameData.game_name.toLowerCase(),
-        game_logo_path: gameLogoPath,
-        game_banner_path: gameBannerPath,
+        game_name: gameNameSlug,
+        game_logo_path: logoPath,
+        game_banner_path: bannerPath,
         registered_by: gameData.registered_by,
+        networks: normalizeArray(gameData.networks),
+        game_platforms: normalizeArray(gameData.game_platforms),
+        rewards_token_networks: normalizeArray(gameData.rewards_token_networks),
+        accepted_tokens: normalizeArray(gameData.accepted_tokens),
+        rewards_pools: normalizeArray(gameData.rewards_pools),
+        prize_pools: normalizeArray(gameData.prize_pools),
+        auto_accept_liquid_tokens: !!gameData.auto_accept_liquid_tokens,
+        min_liquidity_volume: gameData.min_liquidity_volume || 10000,
         created_at: new Date(),
         last_updated: new Date()
       });
 
       await newGame.save();
 
-      // Return response with the game key (only for initial registration)
+      const gameKey = uuidv4();
+      const gameKeyEntry = new GameKeys({
+        game_name: gameNameSlug,
+        secret_key: gameKey
+      });
+
+      await gameKeyEntry.save();
+
       res.status(201).json({
         status: "success",
         message: "Game registered successfully!",
-        game_key: gameKey // The game key is returned in the response
+        game_key: gameKey
       });
     } catch (error) {
       console.error("❌ Game Registration Error:", error);
@@ -95,13 +113,13 @@ class GameRegistration {
     }
   }
 
-  // Save image helper function
-  saveImage(base64Data, type, gameName) {
+  saveImage(tempFilePath, type, gameName, gameFolder) {
     try {
-      const fileName = `${gameName.toLowerCase().replace(/\s+/g, "_")}_${type}.jpg`;
-      const filePath = path.join(imageStorageDir, fileName);
-      fs.writeFileSync(filePath, Buffer.from(base64Data, "base64"));
-      return filePath;
+      const ext = path.extname(tempFilePath); // Keep original extension
+      const newFileName = `${type}${ext}`;
+      const newPath = path.join(gameFolder, newFileName);
+      fs.renameSync(tempFilePath, newPath); // Move file into game folder
+      return newPath;
     } catch (error) {
       console.error(`❌ Error saving ${type} image:`, error);
       return "";

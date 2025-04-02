@@ -7,6 +7,7 @@ import http from "http";
 import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
 import AuthEndpoint from "./AuthEndpoint.js";
+import QRCodeAuth from "../../HVM/QRCode_Auth_new.js";
 import SessionStore from "../../HVM/SessionStore.js";
 import { isDomainWhitelisted, validateApiKey } from "../../HVM/authMiddleware.js";
 
@@ -19,6 +20,11 @@ const app = express();
 const server = http.createServer(app);
 const port = 4000;
 const authAPI = new AuthEndpoint();
+
+// 🔐 Initialize QR Generator
+const mongoClient = global.mongoClient; // Assume it's set globally or inject correctly
+const systemConfig = global.systemConfig; // Ensure this is loaded if needed
+const qrAuth = new QRCodeAuth(mongoClient, "yourDbName", systemConfig); // Set your DB name properly
 
 // ✅ Strict CORS with domain or API key
 app.use(async (req, res, next) => {
@@ -57,7 +63,17 @@ const authLimiter = rateLimit({
 // ✅ Auth main route
 app.post(["/", "/api/auth/"], authLimiter, async (req, res) => {
   try {
-    await authAPI.handleRequest(req, res);
+    const result = await qrAuth.generateAuthenticationQRCode();
+    if (result.status === "success") {
+      const img = Buffer.from(result.qrCodeBase64.split(",")[1], "base64");
+      res.writeHead(200, {
+        "Content-Type": "image/png",
+        "Content-Length": img.length
+      });
+      res.end(img);
+    } else {
+      res.status(500).json({ error: "Failed to generate QR" });
+    }
   } catch (e) {
     console.error("❌ /api/auth:", e);
     res.status(500).json({ error: e.message });

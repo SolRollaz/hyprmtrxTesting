@@ -1,10 +1,10 @@
-// File: /api/game_registration/GameRegistration.js
+// File: /api/gameRego/GameRegistration.js
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import GameInfo from "../../../Schema/gameDataSchema.js";
-import GameKeys from "../../../Schema/gameKeysSchema.js";
-import SessionStore from "../../../HVM/SessionStore.js";
+import GameInfo from "../../Schema/gameDataSchema.js";
+import GameKeys from "../../Schema/gameKeysSchema.js";
+import SessionStore from "../../HVM/SessionStore.js";
 import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);

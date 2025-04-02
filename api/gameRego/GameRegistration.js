@@ -111,6 +111,9 @@ class GameRegistration {
 
       await gameKeyEntry.save();
 
+      // 🔒 Expire session after successful registration
+      SessionStore.sessionMap.delete(walletAddress);
+
       res.status(201).json({
         status: "success",
         message: "Game registered successfully!",

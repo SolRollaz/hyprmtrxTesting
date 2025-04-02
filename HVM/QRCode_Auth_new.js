@@ -94,7 +94,7 @@ class QRCodeAuth {
     }
   }
 
-  async signMessage(sessionId, message, ws) {
+  async signMessage(sessionId, ws) {
     try {
       if (!this.activeSessions.has(sessionId)) {
         throw new Error("Session not found.");
@@ -102,6 +102,9 @@ class QRCodeAuth {
 
       const { session } = await this.waitForScan(sessionId);
       const walletAddress = session.namespaces.eip155.accounts[0].split(":")[2];
+
+      // 🔒 Must match backend's expected format exactly
+      const message = `Sign this message to authenticate with your wallet: ${walletAddress}`;
 
       console.log(`✍️ Signing message for wallet: ${walletAddress}`);
 

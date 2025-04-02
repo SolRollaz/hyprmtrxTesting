@@ -94,7 +94,7 @@ class QRCodeAuth {
     }
   }
 
-  async signMessage(sessionId, message) {
+  async signMessage(sessionId, message, ws) {
     try {
       if (!this.activeSessions.has(sessionId)) {
         throw new Error("Session not found.");
@@ -115,6 +115,19 @@ class QRCodeAuth {
       });
 
       console.log(`✅ Message signed! [Session: ${sessionId}]`, signature);
+
+      // ✅ Send to WebSocket (required by AuthEndpoint.js)
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({
+          action: "verifyAuthentication",
+          walletAddress,
+          signedMessage: signature,
+          authType: "metamask"
+        }));
+        console.log("✅ Sent signed message to WebSocket:", walletAddress);
+      } else {
+        console.warn("⚠️ WebSocket not open. Cannot send authentication payload.");
+      }
 
       return { status: "success", walletAddress, signature };
     } catch (error) {

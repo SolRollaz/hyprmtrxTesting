@@ -4,6 +4,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import GameInfo from "../../Schema/gameDataSchema.js";
 import GameKeys from "../../Schema/gameKeysSchema.js";
+import SessionStore from "../../HVM/SessionStore.js";
 import { v4 as uuidv4 } from "uuid";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -20,13 +21,24 @@ class GameRegistration {
   async handleRegistration(req, res) {
     try {
       const gameData = req.body;
+      const token = req.headers.authorization?.replace("Bearer ", "");
+
+      if (!token) {
+        return res.status(401).json({ status: "failure", message: "Missing authorization token." });
+      }
+
+      const sessionEntry = [...SessionStore.sessionMap.entries()].find(([, v]) => v.token === token);
+      if (!sessionEntry) {
+        return res.status(403).json({ status: "failure", message: "Invalid or expired session." });
+      }
+
+      const walletAddress = sessionEntry[0];
 
       const requiredFields = [
         "game_name",
         "networks",
         "game_engine",
-        "game_platforms",
-        "registered_by"
+        "game_platforms"
       ];
 
       for (const field of requiredFields) {
@@ -76,7 +88,7 @@ class GameRegistration {
         game_name: gameNameSlug,
         game_logo_path: logoPath,
         game_banner_path: bannerPath,
-        registered_by: gameData.registered_by,
+        registered_by: walletAddress,
         networks: normalizeArray(gameData.networks),
         game_platforms: normalizeArray(gameData.game_platforms),
         rewards_token_networks: normalizeArray(gameData.rewards_token_networks),

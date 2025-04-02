@@ -53,6 +53,7 @@ class AuthEndpoint {
     ws.on("message", async (msg) => {
       try {
         const data = JSON.parse(msg);
+        console.log("🧠 WS Received:", data);
 
         if (data.action === "authenticateUser") {
           const qr = await this.qrCodeAuth.generateAuthenticationQRCode();
@@ -70,6 +71,7 @@ class AuthEndpoint {
         }
 
         else if (data.action === "verifyAuthentication") {
+          console.log("🔐 Received verifyAuthentication payload:", data);
           const { walletAddress, signedMessage, authType, gameName } = data;
           const auth = await this.masterAuth.verifySignedMessage(walletAddress, signedMessage, authType, gameName);
 
@@ -78,6 +80,8 @@ class AuthEndpoint {
           }
 
           this.sendAuthResponse(ws, auth);
+        } else {
+          ws.send(JSON.stringify({ status: "failure", message: "Unknown action" }));
         }
 
       } catch (err) {
@@ -86,7 +90,11 @@ class AuthEndpoint {
       }
     });
 
-    ws.on("close", () => this.webSocketClients.delete(clientId));
+    ws.on("close", () => {
+      console.log("⚠️ WebSocket closed [clientId: " + clientId + "]");
+      this.webSocketClients.delete(clientId);
+    });
+
     ws.on("error", (e) => console.error("⚠️ WebSocket error:", e));
   }
 
@@ -96,8 +104,8 @@ class AuthEndpoint {
       message: authResult.message,
       token: authResult.token || null,
     };
+    console.log("🚀 Sending Auth Response:", payload);
     ws.send(JSON.stringify(payload));
-    console.log("✅ Sent to game:", payload);
   }
 
   async sendJWTToClient(sessionId, token) {

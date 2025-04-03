@@ -4,10 +4,10 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const sessionStore = require('../../sessionstore');
 const systemConfig = require('../../systemConfig');
-const { getExpectedTokenAmount } = require('../../HVM/valueChecker');
 const Redis = require('ioredis');
 const NodeCache = require('node-cache');
 const winston = require('winston');
+const SellEndpoint = require('./SellEndpoint');
 
 const app = express();
 const PORT = process.env.PORT || 9055;
@@ -64,63 +64,9 @@ app.use(async (req, res, next) => {
   }
 });
 
-// Route: /value-check
-// Returns expected token amount for given USDC value
-app.post('/value-check', async (req, res) => {
-  const { priceInUSDC, tokenContractAddress, network, itemId } = req.body;
-  if (!priceInUSDC || !tokenContractAddress || !network || !itemId) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
+app.post('/value-check', SellEndpoint.handleValueCheck);
+app.post('/sell', SellEndpoint.handleSell);
 
-  try {
-    const expectedAmount = await getExpectedTokenAmount(priceInUSDC, tokenContractAddress, network);
-    const cacheKey = `${req.user.userId}-${itemId}`;
-    try {
-      await redis.setex(cacheKey, TTL_SECONDS, expectedAmount.toString());
-    } catch (err) {
-      logger.warn(`Redis set failed, falling back to NodeCache: ${err.message}`);
-      fallbackCache.set(cacheKey, expectedAmount);
-    }
-    return res.json({ expectedAmount });
-  } catch (err) {
-    logger.error(`Value check processing error: ${err.message}`);
-    return res.status(500).json({ error: 'Value check failed' });
-  }
-});
-
-// Route: /sell
-// Validates purchase data and logs it (stub logic only)
-app.post('/sell', async (req, res) => {
-  const { itemId, itemType, priceInUSDC, tokenContractAddress, network, amountPaid } = req.body;
-  if (!itemId || !itemType || !priceInUSDC || !tokenContractAddress || !network || !amountPaid) {
-    return res.status(400).json({ error: 'Missing required fields' });
-  }
-
-  const cacheKey = `${req.user.userId}-${itemId}`;
-  let expectedAmount;
-  try {
-    const cached = await redis.get(cacheKey);
-    expectedAmount = cached ? parseFloat(cached) : null;
-  } catch (err) {
-    logger.warn(`Redis get failed, using NodeCache: ${err.message}`);
-    expectedAmount = fallbackCache.get(cacheKey);
-  }
-
-  if (!expectedAmount) {
-    return res.status(410).json({ error: 'Expected value expired. Please reinitiate purchase.' });
-  }
-
-  if (Math.abs(amountPaid - expectedAmount) > 0.000001) {
-    return res.status(400).json({ error: 'Incorrect payment amount' });
-  }
-
-  // TODO: Log transaction and continue verification flow
-
-  return res.json({ success: true, message: 'Payment verified and item recorded.' });
-});
-
-// Route: /health
-// Checks Redis connection and API readiness
 app.get('/health', async (req, res) => {
   try {
     const pong = await redis.ping();

@@ -4,13 +4,42 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const sessionStore = require('../../sessionstore');
 const systemConfig = require('../../systemConfig');
-const { getExpectedTokenAmount } = require('./valueChecker');
+const { getExpectedTokenAmount } = require('../../HVM/valueChecker');
+const Redis = require('ioredis');
 const NodeCache = require('node-cache');
+const winston = require('winston');
 
 const app = express();
 const PORT = process.env.PORT || 9055;
 const TTL_SECONDS = 180;
-const expectedValueCache = new NodeCache({ stdTTL: TTL_SECONDS });
+
+// Logger setup
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.printf(({ timestamp, level, message }) => {
+      return `${timestamp} [${level.toUpperCase()}] ${message}`;
+    })
+  ),
+  transports: [new winston.transports.Console()]
+});
+
+const redis = new Redis(systemConfig.REDIS_URL, {
+  maxRetriesPerRequest: 2,
+  connectTimeout: 5000,
+  lazyConnect: false,
+  enableOfflineQueue: true,
+  retryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    logger.warn(`Redis retry #${times}, delaying ${delay}ms`);
+    return delay;
+  },
+});
+
+redis.on('error', (err) => logger.error(`Redis error: ${err.message}`));
+
+const fallbackCache = new NodeCache({ stdTTL: TTL_SECONDS });
 
 app.use(express.json());
 
@@ -46,9 +75,15 @@ app.post('/value-check', async (req, res) => {
   try {
     const expectedAmount = await getExpectedTokenAmount(priceInUSDC, tokenContractAddress, network);
     const cacheKey = `${req.user.userId}-${itemId}`;
-    expectedValueCache.set(cacheKey, expectedAmount);
+    try {
+      await redis.setex(cacheKey, TTL_SECONDS, expectedAmount.toString());
+    } catch (err) {
+      logger.warn(`Redis set failed, falling back to NodeCache: ${err.message}`);
+      fallbackCache.set(cacheKey, expectedAmount);
+    }
     return res.json({ expectedAmount });
   } catch (err) {
+    logger.error(`Value check processing error: ${err.message}`);
     return res.status(500).json({ error: 'Value check failed' });
   }
 });
@@ -62,7 +97,14 @@ app.post('/sell', async (req, res) => {
   }
 
   const cacheKey = `${req.user.userId}-${itemId}`;
-  const expectedAmount = expectedValueCache.get(cacheKey);
+  let expectedAmount;
+  try {
+    const cached = await redis.get(cacheKey);
+    expectedAmount = cached ? parseFloat(cached) : null;
+  } catch (err) {
+    logger.warn(`Redis get failed, using NodeCache: ${err.message}`);
+    expectedAmount = fallbackCache.get(cacheKey);
+  }
 
   if (!expectedAmount) {
     return res.status(410).json({ error: 'Expected value expired. Please reinitiate purchase.' });
@@ -75,6 +117,18 @@ app.post('/sell', async (req, res) => {
   // TODO: Log transaction and continue verification flow
 
   return res.json({ success: true, message: 'Payment verified and item recorded.' });
+});
+
+// Route: /health
+// Checks Redis connection and API readiness
+app.get('/health', async (req, res) => {
+  try {
+    const pong = await redis.ping();
+    return res.json({ status: 'ok', redis: pong });
+  } catch (err) {
+    logger.error(`Health check failed: ${err.message}`);
+    return res.status(503).json({ status: 'fail', redis: 'unreachable' });
+  }
 });
 
 app.listen(PORT, () => {

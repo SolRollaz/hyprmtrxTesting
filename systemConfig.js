@@ -2,8 +2,6 @@
 
 import 'dotenv/config';
 import { JsonRpcProvider } from "ethers";
-import path from "path";
-import fs from "fs";
 
 class SystemConfig {
     constructor() {
@@ -22,7 +20,7 @@ class SystemConfig {
         }
 
         this.walletConnect = {
-            projectId: process.env.WALLETCONNECT_PROJECT_ID || "1b54a5d583ce208cc28c1362cdd3d437",
+            projectId: process.env.WALLETCONNECT_PROJECT_ID,
             chains: this.getChainsConfig(),
             metadata: {
                 name: process.env.APP_NAME || "hyprmtrx",
@@ -43,23 +41,38 @@ class SystemConfig {
         return {
             ETH: {
                 name: "Ethereum",
-                rpcUrl: process.env.RPC_URL_ETHEREUM || "https://mainnet.infura.io/v3/YOUR_INFURA_PROJECT_ID",
-                feeWallet: process.env.FEE_WALLET_ETH || "0x0000000000000000000000000000000000000000",
+                rpcUrl: process.env.RPC_URL_ETHEREUM,
+                feeWallet: process.env.FEE_WALLET_ETH,
+                feeWallet2: process.env.FEE_WALLET2_ETH,
+                paymentWallet: process.env.Payement_Wallet_ETH,
             },
             BNB: {
                 name: "Binance Smart Chain",
-                rpcUrl: process.env.RPC_URL_BNB || "https://bsc-dataseed.binance.org/",
-                feeWallet: process.env.FEE_WALLET_BNB || "0x0000000000000000000000000000000000000000",
+                rpcUrl: process.env.RPC_URL_BNB,
+                feeWallet: process.env.FEE_WALLET_BNB,
+                feeWallet2: process.env.FEE_WALLET2_BNB,
+                paymentWallet: process.env.Payement_Wallet_BNB,
             },
             AVAX: {
                 name: "Avalanche",
-                rpcUrl: process.env.RPC_URL_AVAX || "https://api.avax.network/ext/bc/C/rpc",
-                feeWallet: process.env.FEE_WALLET_AVAX || "0x0000000000000000000000000000000000000000",
+                rpcUrl: process.env.RPC_URL_AVAX,
+                feeWallet: process.env.FEE_WALLET_AVAX,
+                feeWallet2: process.env.FEE_WALLET2_AVAX,
+                paymentWallet: process.env.Payement_Wallet_AVAX,
             },
             BASE: {
                 name: "Base",
-                rpcUrl: process.env.RPC_URL_BASE || "https://mainnet.base.org",
-                feeWallet: process.env.FEE_WALLET_BASE || "0x0000000000000000000000000000000000000000",
+                rpcUrl: process.env.RPC_URL_BASE,
+                feeWallet: process.env.FEE_WALLET_BASE,
+                feeWallet2: process.env.FEE_WALLET2_BASE,
+                paymentWallet: process.env.Payement_Wallet_BASE,
+            },
+            DAG: {
+                name: "Constellation DAG",
+                rpcUrl: process.env.RPC_URL_DAG || "https://mainnet.constellationnetwork.io",
+                feeWallet: process.env.FEE_WALLET_DAG,
+                feeWallet2: process.env.FEE_WALLET2_DAG,
+                paymentWallet: process.env.Payement_Wallet_DAG,
             },
         };
     }
@@ -81,6 +94,7 @@ class SystemConfig {
             "Binance Smart Chain": 56,
             Avalanche: 43114,
             Base: 8453,
+            "Constellation DAG": 0
         };
         return chainIdMap[name] || 0;
     }

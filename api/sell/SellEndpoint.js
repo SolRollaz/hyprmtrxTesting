@@ -5,6 +5,7 @@ const Redis = require('ioredis');
 const NodeCache = require('node-cache');
 const logger = require('winston');
 const systemConfig = require('../../systemConfig');
+const GameData = require('../../Schema/gameDataSchema');
 
 const TTL_SECONDS = 180;
 const redis = new Redis(systemConfig.REDIS_URL);
@@ -12,8 +13,8 @@ const fallbackCache = new NodeCache({ stdTTL: TTL_SECONDS });
 
 class SellEndpoint {
   static async handleValueCheck(req, res) {
-    const { priceInUSDC, tokenContractAddress, network, itemId } = req.body;
-    if (!priceInUSDC || !tokenContractAddress || !network || !itemId) {
+    const { priceInUSDC, tokenContractAddress, network, itemId, itemType } = req.body;
+    if (!priceInUSDC || !tokenContractAddress || !network || !itemId || !itemType) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -58,9 +59,29 @@ class SellEndpoint {
       return res.status(400).json({ error: 'Incorrect payment amount' });
     }
 
-    // TODO: transaction logging, verification, delivery
-
     return res.json({ success: true, message: 'Payment verified and item recorded.' });
+  }
+
+  static async handleConfirmPurchase(req, res) {
+    const { gameKey, purchasedApis } = req.body;
+    if (!gameKey || !Array.isArray(purchasedApis)) {
+      return res.status(400).json({ error: 'Missing gameKey or purchasedApis array' });
+    }
+
+    try {
+      const game = await GameData.findOne({ gameKey });
+      if (!game) return res.status(404).json({ error: 'Game not found' });
+
+      purchasedApis.forEach(api => {
+        game.hyprmtrx_apis[api] = true;
+      });
+
+      await game.save();
+      return res.json({ success: true, message: 'APIs activated successfully.' });
+    } catch (err) {
+      logger.error(`Confirm purchase error: ${err.message}`);
+      return res.status(500).json({ error: 'Failed to confirm purchase' });
+    }
   }
 }
 

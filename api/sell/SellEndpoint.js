@@ -6,6 +6,7 @@ const NodeCache = require('node-cache');
 const logger = require('winston');
 const systemConfig = require('../../systemConfig');
 const GameData = require('../../Schema/gameDataSchema');
+const axios = require('axios');
 
 const TTL_SECONDS = 180;
 const redis = new Redis(systemConfig.REDIS_URL);
@@ -63,7 +64,7 @@ class SellEndpoint {
   }
 
   static async handleConfirmPurchase(req, res) {
-    const { gameKey, purchasedApis } = req.body;
+    const { gameKey, purchasedApis, notifyUrl } = req.body;
     if (!gameKey || !Array.isArray(purchasedApis)) {
       return res.status(400).json({ error: 'Missing gameKey or purchasedApis array' });
     }
@@ -77,6 +78,19 @@ class SellEndpoint {
       });
 
       await game.save();
+
+      if (notifyUrl) {
+        try {
+          await axios.post(notifyUrl, {
+            gameKey,
+            activatedApis: purchasedApis,
+            timestamp: new Date().toISOString()
+          });
+        } catch (err) {
+          logger.warn(`Webhook notification failed: ${err.message}`);
+        }
+      }
+
       return res.json({ success: true, message: 'APIs activated successfully.' });
     } catch (err) {
       logger.error(`Confirm purchase error: ${err.message}`);

@@ -66,6 +66,7 @@ app.use(async (req, res, next) => {
 
 app.post('/value-check', SellEndpoint.handleValueCheck);
 app.post('/sell', SellEndpoint.handleSell);
+app.post('/confirm-purchase', SellEndpoint.handleConfirmPurchase);
 
 app.get('/health', async (req, res) => {
   try {

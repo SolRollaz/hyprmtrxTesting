@@ -4,12 +4,13 @@ const User = require('../../Schema/userSchema');
 const GameData = require('../../Schema/gameDataSchema');
 const AddUser = require('../../HVM/AddUser');
 const TransactionLog = require('../../Schema/hyprmtrxTrxSchema');
+const GameWallets = require('../../Schema/gameWalletsSchema');
 const logger = require('winston');
 
 class QuartersEndpoint {
   static async handleConfirmQuarters(req, res) {
-    const { gameKey, priceInUSDC, tokenContractAddress } = req.body;
-    if (!gameKey || !priceInUSDC || !tokenContractAddress) {
+    const { gameKey, priceInUSDC, tokenContractAddress, challengeId } = req.body;
+    if (!gameKey || !priceInUSDC || !tokenContractAddress || !challengeId) {
       return res.status(400).json({ error: 'Missing required fields for quarters purchase' });
     }
 
@@ -53,6 +54,16 @@ class QuartersEndpoint {
 
       await user.save();
 
+      const prizePoolWallet = await GameWallets.findOne({
+        gameKey,
+        challengeId,
+        type: 'PrizePools'
+      });
+
+      if (!prizePoolWallet) {
+        logger.warn(`No prize pool wallet found for challenge ${challengeId}`);
+      }
+
       await TransactionLog.create({
         userId,
         gameKey,
@@ -60,10 +71,20 @@ class QuartersEndpoint {
         tokenContractAddress,
         priceInUSDC,
         timestamp: new Date().toISOString(),
-        details: { quartersToAdd, quartersTag, isBonusToken }
+        details: {
+          quartersToAdd,
+          quartersTag,
+          isBonusToken,
+          challengeId,
+          prizePoolWallet: prizePoolWallet?.address || null
+        }
       });
 
-      return res.json({ success: true, message: `${quartersToAdd} quarters added.` });
+      return res.json({
+        success: true,
+        message: `${quartersToAdd} quarters added.`,
+        prizePoolWallet: prizePoolWallet?.address || null
+      });
     } catch (err) {
       logger.error(`Confirm quarters error: ${err.message}`);
       return res.status(500).json({ error: 'Failed to confirm quarters purchase' });

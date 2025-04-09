@@ -4,7 +4,6 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const sessionStore = require('../../sessionstore');
 const SellEndpoint = require('./SellEndpoint');
-const QuartersEndpoint = require('./QuartersEndpoint');
 const ConfirmPurchase = require('./confirmPurchase');
 
 const app = express();
@@ -34,16 +33,7 @@ app.use(async (req, res, next) => {
 
 app.post('/value-check', SellEndpoint.handleValueCheck);
 app.post('/sell', SellEndpoint.handleSell);
-
-app.post('/confirm-purchase', async (req, res) => {
-  const { itemType } = req.body;
-
-  if (itemType === 'quarters') {
-    return await QuartersEndpoint.handleConfirmQuarters(req, res);
-  }
-
-  return await ConfirmPurchase.handle(req, res);
-});
+app.post('/confirm-purchase', ConfirmPurchase.handle);
 
 app.listen(PORT, () => {
   console.log(`Sell API running on port ${PORT}`);

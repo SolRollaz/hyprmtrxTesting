@@ -23,6 +23,11 @@ const gameWalletsSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  token_pair_url: {
+    type: String,
+    required: false,
+    default: null
+  },
   challengeId: {
     type: String,
     required: function () {

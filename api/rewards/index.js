@@ -26,7 +26,7 @@ function normalizeNetworkKey(net) {
 router.post('/wallet', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { network, token_address, token_pair_url } = req.body;
+    const { network, token_address } = req.body;
 
     if (!network || !token_address) {
       return res.status(400).json({ status: 'error', message: 'Missing network or token address' });
@@ -56,7 +56,6 @@ router.post('/wallet', authMiddleware, async (req, res) => {
         user: userId,
         network: netKey,
         token_address,
-        token_pair_url: token_pair_url || null,
         wallet: walletAddress,
         qrcode: qr,
         eth_balance: 0,

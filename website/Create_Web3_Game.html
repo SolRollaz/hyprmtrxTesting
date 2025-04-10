@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create WEB3 Game - hyprmtrx</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="images/favicon.png" type="image/png">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="container header-container">
+      <div class="logo-section">
+        <img src="images/hyprmtrx_logo.jpg" alt="hyprmtrx logo" class="logo-img">
+        <h1 class="logo-text">hyprmtrx</h1>
+      </div>
+      <nav>
+        <ul class="nav-links">
+          <li><a href="index.html">Home</a></li>
+          <li><a href="team.html">Team</a></li>
+          <li><a href="hpmx_tokenomics.html">HPMX Tokenomics</a></li>
+          <li><a href="buy_hpmx.html">BUY HPMX</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="container">
+    <div class="content" style="padding-top: 40px; text-align: center;">
+      <h1 style="color: #ffd700;">Register game info to the hyprmtrx network</h1>
+
+      <!-- Game Registration Form -->
+      <form id="gameRegistrationForm" class="game-form" style="margin: 0 auto; max-width: 500px; text-align: left; margin-top: 40px;">
+        <div style="margin-bottom: 20px;">
+          <label for="game_name">Game Name</label><br>
+          <input type="text" id="game_name" name="game_name" required readonly style="width: 100%; padding: 10px; background-color: #222; color: #ffd700; font-weight: bold;" />
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="game_engine">Game Engine</label><br>
+          <input type="text" id="game_engine" name="game_engine" required style="width: 100%; padding: 10px;" />
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="description">Game Description</label><br>
+          <textarea id="description" name="description" placeholder="Short description of your game" required style="width: 100%; padding: 10px;"></textarea>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="game_logo">Game Logo (JPG/PNG, <strong>400x400</strong>, max 2MB)</label><br>
+          <input type="file" id="game_logo" name="game_logo" accept="image/png, image/jpeg" required />
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="game_banner">Game Banner (JPG/PNG, <strong>1500x500</strong>, max 2MB)</label><br>
+          <input type="file" id="game_banner" name="game_banner" accept="image/png, image/jpeg" required />
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="networks">Select Supported Networks</label><br>
+          <select id="networks" name="networks" multiple required style="width: 100%; padding: 10px;">
+            <option value="base">Base</option>
+            <option value="avax">Avalanche</option>
+            <option value="bnb">BNB Chain</option>
+            <option value="dag">DAG</option>
+          </select>
+          <small>Hold CTRL (or ⌘ on Mac) to select multiple</small>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="game_platforms">Game Platforms</label><br>
+          <select id="game_platforms" name="game_platforms" multiple required style="width: 100%; padding: 10px;">
+            <option value="steam">Steam</option>
+            <option value="android">Android</option>
+            <option value="apple">Apple</option>
+            <option value="ps5">PS5</option>
+            <option value="nintendo">Nintendo</option>
+            <option value="webgl">WebGL</option>
+            <option value="pc">PC</option>
+            <option value="xbox">Xbox</option>
+            <option value="meta_quest">Meta Quest</option>
+            <option value="vr">VR</option>
+            <option value="linux">Linux</option>
+            <option value="chromeos">ChromeOS</option>
+            <option value="ios_arcade">iOS Arcade</option>
+          </select>
+          <small>Hold CTRL (or ⌘ on Mac) to select multiple</small>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="accepted_tokens">Accepted Tokens (Contract Addresses)</label><br>
+          <textarea id="accepted_tokens" name="accepted_tokens" placeholder="Comma-separated tokens" style="width: 100%; padding: 10px;"></textarea>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label>
+            <input type="checkbox" id="auto_accept_liquid_tokens" name="auto_accept_liquid_tokens" />
+            Accept all tokens with over $10k daily volume
+          </label>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label for="min_liquidity_volume">Min Daily Volume (USD)</label><br>
+          <input type="number" id="min_liquidity_volume" name="min_liquidity_volume" value="10000" min="1000" style="width: 100%; padding: 10px;" />
+        </div>
+
+        <div style="text-align: center; margin-bottom: 40px;">
+          <button type="submit" class="cta-button">
+            Register Game
+          </button>
+        </div>
+      </form>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>&copy; 2025 hyprmtrx. All rights reserved.</p>
+      <div class="social-buttons">
+        <a href="https://x.com/HyprMtrx" target="_blank">hyprmtrx on x.com</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JS -->
+  <script type="module" src="js/register.js"></script>
+</body>
+</html>

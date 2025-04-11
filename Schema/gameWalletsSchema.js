@@ -34,6 +34,11 @@ const gameWalletsSchema = new mongoose.Schema({
       return this.type === 'PrizePools';
     }
   },
+  hgtpBalances: {
+    type: Map,
+    of: Number,
+    default: {}
+  },
   createdAt: {
     type: Date,
     default: Date.now

@@ -69,7 +69,7 @@ router.post('/wallet', authMiddleware, async (req, res) => {
       wallet: walletRecord.wallet,
       qrcode: walletRecord.qrcode,
       eth_balance: walletRecord.eth_balance,
-      token_balance: walletRecord.token_balance
+      token_balance: walletRecord.hgtpBalances.get(token_address) || 0
     });
   } catch (err) {
     console.error('[POST /reward/wallet]', err);
@@ -102,10 +102,17 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
     ], provider);
 
     const tokenRaw = await tokenContract.balanceOf(record.wallet);
-    const tokenInEth = parseFloat(ethers.utils.formatEther(tokenRaw));
+    const tokenRealBalance = parseFloat(ethers.utils.formatEther(tokenRaw));
+
+    const previous = record.token_balance || 0;
+    if (tokenRealBalance > previous) {
+      const depositAmount = tokenRealBalance - previous;
+      const hgtp = record.hgtpBalances.get(record.token_address) || 0;
+      record.hgtpBalances.set(record.token_address, hgtp + depositAmount);
+    }
 
     record.eth_balance = ethInEth;
-    record.token_balance = tokenInEth;
+    record.token_balance = tokenRealBalance;
     await record.save();
 
     await HyprmtrxTrx.create({
@@ -117,7 +124,8 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
         wallet: record.wallet,
         network: record.network,
         eth_balance: ethInEth,
-        token_balance: tokenInEth,
+        token_balance: tokenRealBalance,
+        hgtp_balance: record.hgtpBalances.get(record.token_address),
         token_address: record.token_address
       }
     });
@@ -126,7 +134,7 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
       status: ethInEth > 0 ? 'success' : 'error',
       message: ethInEth > 0 ? 'ETH deposit confirmed' : 'ETH deposit not detected yet',
       eth_balance: ethInEth,
-      token_balance: tokenInEth
+      token_balance: record.hgtpBalances.get(record.token_address) || 0
     });
   } catch (err) {
     console.error('[POST /reward/depositConfirm]', err);

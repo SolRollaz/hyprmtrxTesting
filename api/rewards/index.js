@@ -77,10 +77,21 @@ router.post('/wallet', authMiddleware, async (req, res) => {
   }
 });
 
+const depositRateLimit = new Map();
+
 router.post('/depositConfirm', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
     const userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    const throttleKey = `${userId}:${wallet}`;
+    const now = Date.now();
+    if (depositRateLimit.has(throttleKey)) {
+      const lastCall = depositRateLimit.get(throttleKey);
+      if (now - lastCall < 5000) {
+        return res.status(429).json({ status: 'error', message: 'Please wait 5 seconds before checking again.' });
+      }
+    }
+    depositRateLimit.set(throttleKey, now);
     const { wallet } = req.body;
 
     const record = await GameWallet.findOne({ user: userId, wallet });

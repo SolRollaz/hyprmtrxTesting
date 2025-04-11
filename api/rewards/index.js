@@ -26,7 +26,7 @@ function normalizeNetworkKey(net) {
 router.post('/wallet', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { network, token_address } = req.body;
+    const { network, token_address, token_pair_url } = req.body;
 
     if (!network || !token_address) {
       return res.status(400).json({ status: 'error', message: 'Missing network or token address' });
@@ -56,6 +56,7 @@ router.post('/wallet', authMiddleware, async (req, res) => {
         user: userId,
         network: netKey,
         token_address,
+        token_pair_url: token_pair_url || null,
         wallet: walletAddress,
         qrcode: qr,
         eth_balance: 0,
@@ -121,12 +122,9 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
       }
     });
 
-    if (ethInEth === 0) {
-      return res.json({ status: 'error', message: 'ETH deposit not detected yet' });
-    }
-
     return res.json({
-      status: 'success',
+      status: ethInEth > 0 ? 'success' : 'error',
+      message: ethInEth > 0 ? 'ETH deposit confirmed' : 'ETH deposit not detected yet',
       eth_balance: ethInEth,
       token_balance: tokenInEth
     });

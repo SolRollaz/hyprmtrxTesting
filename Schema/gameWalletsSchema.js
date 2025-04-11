@@ -47,7 +47,14 @@ const gameWalletsSchema = new mongoose.Schema({
 
 /**
  * To track token deposit updates into hgtpBalances map:
- * GameWallets.updateOne({ address, network }, { $inc: { [`hgtpBalances.${tokenAddress}`]: tokenAmount } })
+ * GameWallets.updateOne(
+ *   { address, network },
+ *   { $inc: { [`hgtpBalances.${tokenAddress}`]: tokenAmount } }
+ * )
+ *
+ * On /reward/depositConfirm:
+ *   Only increase HGTP balance if new deposit > old recorded
+ *   Always return HGTP balance (not raw token balance)
  */
 
 module.exports = mongoose.model('GameWallets', gameWalletsSchema);

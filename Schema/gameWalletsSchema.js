@@ -45,4 +45,9 @@ const gameWalletsSchema = new mongoose.Schema({
   }
 });
 
+/**
+ * To track token deposit updates into hgtpBalances map:
+ * GameWallets.updateOne({ address, network }, { $inc: { [`hgtpBalances.${tokenAddress}`]: tokenAmount } })
+ */
+
 module.exports = mongoose.model('GameWallets', gameWalletsSchema);

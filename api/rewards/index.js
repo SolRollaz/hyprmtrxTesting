@@ -26,27 +26,39 @@ function normalizeNetworkKey(net) {
 router.post('/wallet', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { network, token_address, token_pair_url } = req.body;
+    const { game_name, network, token_address, token_pair_url } = req.body;
 
-    if (!network || !token_address) {
-      return res.status(400).json({ status: 'error', message: 'Missing network or token address' });
+    if (!game_name || !network || !token_address) {
+      return res.status(400).json({ status: 'error', message: 'Missing game_name, network or token_address' });
     }
 
     const netKey = normalizeNetworkKey(network);
-    const existing = await GameWallet.findOne({ user: userId, network: netKey, token_address });
+    const existing = await GameWallet.findOne({ user: userId, game_name, network: netKey, token_address });
 
     let walletRecord = existing;
 
     if (!walletRecord) {
-      const existingKey = await GamePrivateKey.findOne({ user: userId, network: netKey });
-      let privateKey = existingKey?.private_key;
+      const existingKey = await GamePrivateKey.findOne({ game_name });
+      let privateKey = null;
+
+      if (existingKey) {
+        const existingWallet = existingKey.wallets.find(w => w.network === netKey && w.label === 'reward_pool');
+        privateKey = existingWallet ? existingKey.getDecryptedKey(existingWallet.address) : null;
+      }
 
       if (!privateKey) {
         privateKey = generatePrivateKey(netKey);
-        await GamePrivateKey.create({ user: userId, network: netKey, private_key: privateKey });
+        if (!existingKey) {
+          await GamePrivateKey.create({
+            game_name,
+            wallets: [{ label: 'reward_pool', network: netKey, address: '', encrypted_private_key: '' }]
+          });
+        } else {
+          await existingKey.addWallet('reward_pool', netKey, '', privateKey);
+        }
       }
 
-      const initializer = new WalletInitializer(userId);
+      const initializer = new WalletInitializer(game_name);
       await initializer.initializeWallets([{ network: netKey, private_key: privateKey }]);
 
       const walletAddress = initializer.getInitializedWallets()?.[netKey]?.address;
@@ -54,6 +66,8 @@ router.post('/wallet', authMiddleware, async (req, res) => {
 
       walletRecord = await GameWallet.create({
         user: userId,
+        game_name,
+        type: 'Rewards',
         network: netKey,
         token_address,
         token_pair_url: token_pair_url || null,
@@ -81,9 +95,14 @@ const depositRateLimit = new Map();
 
 router.post('/depositConfirm', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id;
     const userIp = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    const throttleKey = `${userId}:${wallet}`;
+    const { wallet, game_name } = req.body;
+
+    if (!wallet || !game_name) {
+      return res.status(400).json({ status: 'error', message: 'Missing wallet or game_name' });
+    }
+
+    const throttleKey = `${wallet}:${game_name}`;
     const now = Date.now();
     if (depositRateLimit.has(throttleKey)) {
       const lastCall = depositRateLimit.get(throttleKey);
@@ -92,9 +111,8 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
       }
     }
     depositRateLimit.set(throttleKey, now);
-    const { wallet } = req.body;
 
-    const record = await GameWallet.findOne({ user: userId, wallet });
+    const record = await GameWallet.findOne({ wallet, game_name });
     if (!record) {
       return res.status(404).json({ status: 'error', message: 'Wallet not found' });
     }
@@ -127,7 +145,7 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
     await record.save();
 
     await HyprmtrxTrx.create({
-      user: userId,
+      user: record.user,
       type: 'wallet_balance_check',
       ip: userIp,
       timestamp: new Date(),
@@ -137,7 +155,8 @@ router.post('/depositConfirm', authMiddleware, async (req, res) => {
         eth_balance: ethInEth,
         token_balance: tokenRealBalance,
         hgtp_balance: record.hgtpBalances.get(record.token_address),
-        token_address: record.token_address
+        token_address: record.token_address,
+        game_name: record.game_name
       }
     });
 

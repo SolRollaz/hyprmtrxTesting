@@ -5,7 +5,13 @@ const mongoose = require('mongoose');
 const walletTypes = ['Rewards', 'PrizePools'];
 
 const gameWalletsSchema = new mongoose.Schema({
-  gameKey: {
+  user: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true,
+    index: true
+  },
+  game_name: {
     type: String,
     required: true,
     index: true
@@ -20,6 +26,10 @@ const gameWalletsSchema = new mongoose.Schema({
     required: true
   },
   address: {
+    type: String,
+    required: true
+  },
+  token_address: {
     type: String,
     required: true
   },
@@ -38,6 +48,22 @@ const gameWalletsSchema = new mongoose.Schema({
     type: Map,
     of: Number,
     default: {}
+  },
+  eth_balance: {
+    type: Number,
+    default: 0
+  },
+  token_balance: {
+    type: Number,
+    default: 0
+  },
+  qrcode: {
+    type: String,
+    default: null
+  },
+  wallet: {
+    type: String,
+    required: true
   },
   createdAt: {
     type: Date,

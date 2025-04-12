@@ -1,24 +1,11 @@
-// File: /Schema/GameChallengeClosed.js
-
 import mongoose from "mongoose";
 
 const resultEntrySchema = new mongoose.Schema({
   user_name: { type: String, required: true },
-  data: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  }
+  data: { type: mongoose.Schema.Types.Mixed, default: {} }
 }, { _id: false });
 
-const payoutSchema = new mongoose.Schema({
-  user_name: { type: String, required: true },
-  amount: { type: Number, required: true },
-  token: { type: String, required: true },
-  network: { type: String, required: true },
-  transaction_id: { type: String, required: true }
-}, { _id: false });
-
-const gameChallengeClosedSchema = new mongoose.Schema({
+const gameChallengeOpenSchema = new mongoose.Schema({
   game_id: { type: String, required: true, index: true },
   challenge_id: { type: String, required: true, unique: true },
 
@@ -27,22 +14,17 @@ const gameChallengeClosedSchema = new mongoose.Schema({
 
   participants: { type: [String], default: [] },
   max_participants: { type: Number, default: 0 },
+  unlimited_participants: { type: Boolean, default: false },
 
   status: {
     type: String,
-    enum: ["closed"],
-    default: "closed"
+    enum: ["open", "locked", "in_progress"],
+    default: "open"
   },
 
-  rules: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
-
-  anti_cheat: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
+  rules: { type: mongoose.Schema.Types.Mixed, default: {} },
+  anti_cheat: { type: mongoose.Schema.Types.Mixed, default: {} },
+  payout_structure: { type: mongoose.Schema.Types.Mixed, default: {} },
 
   reward: {
     token: { type: String, required: true },
@@ -50,24 +32,13 @@ const gameChallengeClosedSchema = new mongoose.Schema({
     reward_wallet: { type: String, required: true }
   },
 
-  results: {
-    type: [resultEntrySchema],
-    default: []
-  },
+  results: { type: [resultEntrySchema], default: [] },
 
-  winners: {
-    type: [resultEntrySchema],
-    default: []
-  },
-
-  payouts: {
-    type: [payoutSchema],
-    default: []
-  },
+  auto_restart: { type: Boolean, default: false },
 
   expires_at: { type: Date, required: true },
-  closed_at: { type: Date, default: Date.now }
+  created_at: { type: Date, default: Date.now }
 });
 
-const GameChallengeClosed = mongoose.model("GameChallengeClosed", gameChallengeClosedSchema);
-export default GameChallengeClosed;
+const GameChallengeOpen = mongoose.model("GameChallengeOpen", gameChallengeOpenSchema);
+export default GameChallengeOpen;

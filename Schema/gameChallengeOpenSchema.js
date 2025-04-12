@@ -1,4 +1,4 @@
-// File: /Schema/GameChallengeOpen.js
+// File: /Schema/GameChallengeClosed.js
 
 import mongoose from "mongoose";
 
@@ -10,7 +10,15 @@ const resultEntrySchema = new mongoose.Schema({
   }
 }, { _id: false });
 
-const gameChallengeOpenSchema = new mongoose.Schema({
+const payoutSchema = new mongoose.Schema({
+  user_name: { type: String, required: true },
+  amount: { type: Number, required: true },
+  token: { type: String, required: true },
+  network: { type: String, required: true },
+  transaction_id: { type: String, required: true }
+}, { _id: false });
+
+const gameChallengeClosedSchema = new mongoose.Schema({
   game_id: { type: String, required: true, index: true },
   challenge_id: { type: String, required: true, unique: true },
 
@@ -19,12 +27,11 @@ const gameChallengeOpenSchema = new mongoose.Schema({
 
   participants: { type: [String], default: [] },
   max_participants: { type: Number, default: 0 },
-  unlimited_participants: { type: Boolean, default: false },
 
   status: {
     type: String,
-    enum: ["open", "locked", "in_progress"],
-    default: "open"
+    enum: ["closed"],
+    default: "closed"
   },
 
   rules: {
@@ -33,11 +40,6 @@ const gameChallengeOpenSchema = new mongoose.Schema({
   },
 
   anti_cheat: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {}
-  },
-
-  payout_structure: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
   },
@@ -53,9 +55,19 @@ const gameChallengeOpenSchema = new mongoose.Schema({
     default: []
   },
 
+  winners: {
+    type: [resultEntrySchema],
+    default: []
+  },
+
+  payouts: {
+    type: [payoutSchema],
+    default: []
+  },
+
   expires_at: { type: Date, required: true },
-  created_at: { type: Date, default: Date.now }
+  closed_at: { type: Date, default: Date.now }
 });
 
-const GameChallengeOpen = mongoose.model("GameChallengeOpen", gameChallengeOpenSchema);
-export default GameChallengeOpen;
+const GameChallengeClosed = mongoose.model("GameChallengeClosed", gameChallengeClosedSchema);
+export default GameChallengeClosed;

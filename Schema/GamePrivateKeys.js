@@ -1,3 +1,5 @@
+// File: /Schema/GamePrivateKeys.js
+
 import mongoose from "mongoose";
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -36,6 +38,9 @@ const gamePrivateKeySchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now },
   updated_at: { type: Date, default: Date.now }
 });
+
+// Ensure no duplicate (game_name + network + label)
+gamePrivateKeySchema.index({ game_name: 1, "wallets.network": 1, "wallets.label": 1 }, { unique: true, sparse: true });
 
 gamePrivateKeySchema.methods.addWallet = function (label, network, address, privateKey) {
   const encryptedKey = encrypt(privateKey);

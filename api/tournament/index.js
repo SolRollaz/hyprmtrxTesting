@@ -18,7 +18,8 @@ router.post("/create", authMiddleware, async (req, res) => {
       anti_cheat = {},
       payout_structure = {},
       max_participants = 0,
-      unlimited_participants = false
+      unlimited_participants = false,
+      auto_restart = false
     } = req.body;
 
     if (
@@ -50,6 +51,7 @@ router.post("/create", authMiddleware, async (req, res) => {
       anti_cheat,
       payout_structure,
       reward,
+      auto_restart,
       results: [],
       expires_at
     });

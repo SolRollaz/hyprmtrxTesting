@@ -2,7 +2,10 @@ import mongoose from "mongoose";
 
 const resultEntrySchema = new mongoose.Schema({
   user_name: { type: String, required: true },
-  data: { type: mongoose.Schema.Types.Mixed, default: {} }
+  data: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  }
 }, { _id: false });
 
 const gameChallengeOpenSchema = new mongoose.Schema({
@@ -24,6 +27,12 @@ const gameChallengeOpenSchema = new mongoose.Schema({
 
   rules: { type: mongoose.Schema.Types.Mixed, default: {} },
   anti_cheat: { type: mongoose.Schema.Types.Mixed, default: {} },
+
+  winner_logic: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  },
+
   payout_structure: { type: mongoose.Schema.Types.Mixed, default: {} },
 
   reward: {
@@ -32,10 +41,12 @@ const gameChallengeOpenSchema = new mongoose.Schema({
     reward_wallet: { type: String, required: true }
   },
 
-  results: { type: [resultEntrySchema], default: [] },
+  results: {
+    type: [resultEntrySchema],
+    default: []
+  },
 
   auto_restart: { type: Boolean, default: false },
-
   expires_at: { type: Date, required: true },
   created_at: { type: Date, default: Date.now }
 });

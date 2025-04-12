@@ -24,7 +24,7 @@ const decrypt = (text) => {
 };
 
 const gamePrivateKeySchema = new mongoose.Schema({
-  game_id: { type: String, required: true, index: true },
+  game_name: { type: String, required: true, index: true },
 
   wallets: [{
     label: { type: String, enum: ["reward_pool", "prize_pool"], required: true },
@@ -37,7 +37,6 @@ const gamePrivateKeySchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now }
 });
 
-// Add a new encrypted wallet
 gamePrivateKeySchema.methods.addWallet = function (label, network, address, privateKey) {
   const encryptedKey = encrypt(privateKey);
   this.wallets.push({ label, network, address, encrypted_private_key: encryptedKey });
@@ -45,7 +44,6 @@ gamePrivateKeySchema.methods.addWallet = function (label, network, address, priv
   return this.save();
 };
 
-// Decrypt a private key by address
 gamePrivateKeySchema.methods.getDecryptedKey = function (walletAddress) {
   const wallet = this.wallets.find(w => w.address === walletAddress);
   return wallet ? decrypt(wallet.encrypted_private_key) : null;

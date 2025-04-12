@@ -1,3 +1,5 @@
+// File: /Schema/GameChallengeOpen.js
+
 import mongoose from "mongoose";
 
 const resultEntrySchema = new mongoose.Schema({
@@ -11,14 +13,13 @@ const resultEntrySchema = new mongoose.Schema({
 const gameChallengeOpenSchema = new mongoose.Schema({
   game_id: { type: String, required: true, index: true },
   challenge_id: { type: String, required: true, unique: true },
-  created_by: { type: String, required: true },
 
   title: { type: String, required: true },
   description: { type: String, default: "" },
 
   participants: { type: [String], default: [] },
   max_participants: { type: Number, default: 0 },
-  unlimited_participants: { type: Boolean, default: false }, // ✅ Explicit flag
+  unlimited_participants: { type: Boolean, default: false },
 
   status: {
     type: String,
@@ -37,7 +38,7 @@ const gameChallengeOpenSchema = new mongoose.Schema({
   },
 
   payout_structure: {
-    type: mongoose.Schema.Types.Mixed, // ✅ Game-defined payout logic
+    type: mongoose.Schema.Types.Mixed,
     default: {}
   },
 
@@ -57,5 +58,4 @@ const gameChallengeOpenSchema = new mongoose.Schema({
 });
 
 const GameChallengeOpen = mongoose.model("GameChallengeOpen", gameChallengeOpenSchema);
-
 export default GameChallengeOpen;

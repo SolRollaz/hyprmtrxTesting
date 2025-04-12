@@ -1,5 +1,3 @@
-// File: /Schema/GamePrivateKeys.js
-
 import mongoose from "mongoose";
 import crypto from "crypto";
 import dotenv from "dotenv";
@@ -39,10 +37,17 @@ const gamePrivateKeySchema = new mongoose.Schema({
   updated_at: { type: Date, default: Date.now }
 });
 
-// Ensure no duplicate (game_name + network + label)
-gamePrivateKeySchema.index({ game_name: 1, "wallets.network": 1, "wallets.label": 1 }, { unique: true, sparse: true });
+// ✅ Check if wallet exists before adding
+gamePrivateKeySchema.methods.hasWallet = function (label, network) {
+  return this.wallets.some(w => w.label === label && w.network === network);
+};
 
+// ✅ Add new wallet (throws if duplicate already exists)
 gamePrivateKeySchema.methods.addWallet = function (label, network, address, privateKey) {
+  if (this.hasWallet(label, network)) {
+    throw new Error(`Wallet already exists for ${network} [${label}]`);
+  }
+
   const encryptedKey = encrypt(privateKey);
   this.wallets.push({ label, network, address, encrypted_private_key: encryptedKey });
   this.updated_at = new Date();

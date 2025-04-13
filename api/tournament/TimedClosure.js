@@ -2,39 +2,49 @@
 
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import CloseTournament from "./closeTournament.js";
+import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
 
 export default class TimedClosure {
-  static async checkAndClose(limit = 50) {
+  /**
+   * Auto-close all expired tournaments
+   * Should be invoked via a cron job
+   */
+  static async execute() {
     try {
       const now = new Date();
+      const expired = await GameChallengeOpen.find({
+        expires_at: { $lte: now },
+        status: { $ne: "closed" }
+      });
 
-      const expiredTournaments = await GameChallengeOpen.find({
-        expires_at: { $lte: now }
-      }).limit(limit);
+      const results = [];
 
-      if (!expiredTournaments.length) {
-        console.log(`[TimedClosure] ✅ No tournaments to close at ${now.toISOString()}`);
-        return;
+      for (const tournament of expired) {
+        const { challenge_id } = tournament;
+        const result = await CloseTournament.execute({
+          challenge_id,
+          trigger: "auto_time"
+        });
+
+        await HyprmtrxTrx.create({
+          user: "system",
+          type: "auto_time_close",
+          ip: "cronjob",
+          timestamp: new Date(),
+          data: { challenge_id }
+        });
+
+        results.push({ challenge_id, ...result });
       }
 
-      console.log(`[TimedClosure] 🔎 Found ${expiredTournaments.length} tournaments to close`);
-
-      for (const tournament of expiredTournaments) {
-        try {
-          const { challenge_id } = tournament;
-          const result = await CloseTournament.execute({
-            challenge_id,
-            trigger: "timed"
-          });
-
-          console.log(`[TimedClosure] ✅ Closed ${challenge_id}: ${result.status}`);
-        } catch (err) {
-          console.warn(`[TimedClosure] ⚠️ Failed to close ${tournament.challenge_id}: ${err.message}`);
-        }
-      }
-
+      return {
+        status: "success",
+        closed_count: results.length,
+        details: results
+      };
     } catch (err) {
-      console.error("[TimedClosure] ❌ Global failure:", err.message);
+      console.error("[TimedClosure] Error:", err.message);
+      return { status: "error", message: err.message };
     }
   }
 }

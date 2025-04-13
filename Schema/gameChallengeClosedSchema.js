@@ -5,6 +5,10 @@ const resultEntrySchema = new mongoose.Schema({
   data: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
+  },
+  final: {
+    type: Boolean,
+    default: false
   }
 }, { _id: false });
 

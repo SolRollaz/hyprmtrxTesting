@@ -1,70 +1,80 @@
-// File: /api/tournament/submitTournamentResult.js
-
 import express from "express";
 import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import Game from "../../Schema/Game.js";
+import validateResult from "./utils/validateResult.js";
+import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
 
 const router = express.Router();
 
 router.post("/submit-result", authMiddleware, async (req, res) => {
   try {
-    const { challenge_id, user_name, result_data, is_final, gameKey } = req.body;
+    const {
+      gameKey,
+      game_id,
+      challenge_id,
+      user_name,
+      result,
+      isFinal
+    } = req.body;
 
-    if (!challenge_id || !user_name || !result_data || !gameKey) {
+    if (!gameKey || !game_id || !challenge_id || !user_name || !result) {
       return res.status(400).json({ status: "error", message: "Missing required fields." });
     }
 
+    const game = await Game.findOne({ game_name: game_id });
+    if (!game || (game.created_by !== req.user.username && game.game_key !== gameKey)) {
+      return res.status(403).json({ status: "error", message: "Unauthorized: Invalid game credentials." });
+    }
+
     const challenge = await GameChallengeOpen.findOne({ challenge_id });
-    if (!challenge) {
-      return res.status(404).json({ status: "error", message: "Challenge not found." });
+    if (!challenge || challenge.game_id !== game_id) {
+      return res.status(404).json({ status: "error", message: "Tournament not found." });
     }
 
-    const game = await Game.findOne({ game_name: challenge.game_id });
-    if (!game) {
-      return res.status(404).json({ status: "error", message: "Game not found." });
+    if (challenge.status === "locked" || challenge.status === "in_progress") {
+      return res.status(400).json({ status: "error", message: "Tournament no longer accepting results." });
     }
 
-    const usernameMatch = req.user?.username === game.created_by;
-    const gameKeyMatch = gameKey === game.game_key;
-
-    if (!usernameMatch || !gameKeyMatch) {
-      return res.status(403).json({ status: "error", message: "Invalid ownership credentials." });
+    // Run anti-cheat validation if anti_cheat blob exists
+    if (challenge.anti_cheat && Object.keys(challenge.anti_cheat).length > 0) {
+      const valid = validateResult(result, challenge.anti_cheat);
+      if (!valid) {
+        return res.status(400).json({ status: "error", message: "Anti-cheat validation failed." });
+      }
     }
 
-    // Update or insert result
-    const existing = challenge.results.find(r => r.user_name === user_name);
-    if (existing) {
-      existing.data = result_data;
+    const existingEntry = challenge.results.find(entry => entry.user_name === user_name);
+    if (existingEntry) {
+      existingEntry.data = result;
     } else {
-      challenge.results.push({ user_name, data: result_data });
+      challenge.results.push({ user_name, data: result });
     }
 
-    // Final submission handling
-    if (is_final) {
-      if (!challenge.final_submissions) challenge.final_submissions = [];
-      if (!challenge.final_submissions.includes(user_name)) {
-        challenge.final_submissions.push(user_name);
-      }
-
-      const allFinal = challenge.participants.length > 0 &&
-        challenge.final_submissions.length === challenge.participants.length;
-
-      if (allFinal) {
-        console.log(`✅ All players submitted final results for ${challenge_id}, auto-closing...`);
-        // await triggerAutoClose(challenge_id);
-      }
+    if (!challenge.participants.includes(user_name)) {
+      challenge.participants.push(user_name);
     }
 
+    // Save updated tournament
     await challenge.save();
 
-    return res.json({
-      status: "success",
-      message: `Result submitted${is_final ? " and marked final" : ""}.`
+    // Log the event
+    await HyprmtrxTrx.create({
+      user: req.user.username,
+      type: "submit_tournament_result",
+      ip: req.headers["x-forwarded-for"] || req.connection.remoteAddress,
+      timestamp: new Date(),
+      data: {
+        challenge_id,
+        user_name,
+        isFinal: !!isFinal
+      }
     });
+
+    return res.json({ status: "success", message: "Result submitted." });
   } catch (err) {
     console.error("[POST /tournament/submit-result]", err);
-    return res.status(500).json({ status: "error", message: "Submission failed." });
+    return res.status(500).json({ status: "error", message: "Internal server error." });
   }
 });
 

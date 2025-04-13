@@ -5,10 +5,9 @@ import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
 import GameWallets from "../../Schema/gameWalletsSchema.js";
+import Game from "../../Schema/Game.js"; // Used for ownership check
 import { ethers } from "ethers";
 import SystemConfig from "../../systemConfig.js";
-import fs from "fs";
-import path from "path";
 
 const router = express.Router();
 const depositThrottle = new Map();
@@ -55,6 +54,14 @@ router.post("/create", authMiddleware, async (req, res) => {
     const exists = await GameChallengeOpen.findOne({ challenge_id });
     if (exists) {
       return res.status(409).json({ status: "error", message: "Challenge ID already exists." });
+    }
+
+    const game = await Game.findOne({ game_name: game_id });
+    const isOwner = game?.created_by === req.user.username;
+    const hasKey = req.body.gameKey && req.body.gameKey === game?.game_key;
+
+    if (!isOwner && !hasKey) {
+      return res.status(403).json({ status: "error", message: "Unauthorized to create tournaments for this game." });
     }
 
     const newChallenge = new GameChallengeOpen({

@@ -3,11 +3,13 @@
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import CloseTournament from "./closeTournament.js";
 import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
+import TournamentLogger from "./TournamentLogger.js";
 
 export default class TimedClosure {
   /**
    * Auto-close all expired tournaments
    * Should be invoked via a cron job
+   * @returns {Promise<Object>} Result summary
    */
   static async execute() {
     try {
@@ -20,7 +22,13 @@ export default class TimedClosure {
       const results = [];
 
       for (const tournament of expired) {
-        const { challenge_id } = tournament;
+        const { challenge_id, expires_at } = tournament;
+
+        if (now < new Date(expires_at)) {
+          TournamentLogger.info(`TimedClosure.skip: Tournament ${challenge_id} not expired yet.`);
+          continue;
+        }
+
         const result = await CloseTournament.execute({
           challenge_id,
           trigger: "auto_time"
@@ -34,6 +42,7 @@ export default class TimedClosure {
           data: { challenge_id }
         });
 
+        TournamentLogger.info(`TimedClosure.closed: Tournament ${challenge_id} successfully closed.`);
         results.push({ challenge_id, ...result });
       }
 
@@ -43,7 +52,7 @@ export default class TimedClosure {
         details: results
       };
     } catch (err) {
-      console.error("[TimedClosure] Error:", err.message);
+      TournamentLogger.error(`[TimedClosure] ${err.message}`);
       return { status: "error", message: err.message };
     }
   }

@@ -1,15 +1,19 @@
-// File: /api/challenges/index.js
+// File: /api/tournament/index.js
 
 import express from "express";
 import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
 import GameWallets from "../../Schema/gameWalletsSchema.js";
-import QRCode from "qrcode";
+import { ethers } from "ethers";
+import SystemConfig from "../../systemConfig.js";
+import fs from "fs";
+import path from "path";
 
 const router = express.Router();
+const depositThrottle = new Map();
+const systemConfig = new SystemConfig();
 
-// ✅ Create Tournament Challenge
 router.post("/create", authMiddleware, async (req, res) => {
   try {
     const {
@@ -38,13 +42,13 @@ router.post("/create", authMiddleware, async (req, res) => {
     if (winner_logic) {
       const validModes = ["highest", "lowest"];
       if (!validModes.includes(winner_logic.mode)) {
-        return res.status(400).json({ status: "error", message: "Invalid winner_logic.mode" });
+        return res.status(400).json({ status: "error", message: "Invalid winner_logic.mode: must be 'highest' or 'lowest'" });
       }
       if (typeof winner_logic.metric !== "string" || !winner_logic.metric.trim()) {
-        return res.status(400).json({ status: "error", message: "Invalid winner_logic.metric" });
+        return res.status(400).json({ status: "error", message: "winner_logic.metric must be a non-empty string" });
       }
       if (winner_logic.formula && typeof winner_logic.formula !== "string") {
-        return res.status(400).json({ status: "error", message: "Invalid winner_logic.formula" });
+        return res.status(400).json({ status: "error", message: "winner_logic.formula must be a string" });
       }
     }
 
@@ -90,36 +94,79 @@ router.post("/create", authMiddleware, async (req, res) => {
 
     return res.json({ status: "success", challenge_id });
   } catch (err) {
-    console.error("[POST /challenges/create]", err);
+    console.error("[POST /tournament/create]", err);
     return res.status(500).json({ status: "error", message: "Internal server error." });
   }
 });
 
-// ✅ Fetch Tournament Wallet Address + QR Code
-router.post("/wallet", authMiddleware, async (req, res) => {
+router.post("/depositConfirm", authMiddleware, async (req, res) => {
   try {
-    const { game_name } = req.body;
-    if (!game_name) {
-      return res.status(400).json({ status: "error", message: "Missing game_name" });
-    }
+    const { game_name, network, token_address } = req.body;
+    const throttleKey = `${game_name}:${network}`;
+    const now = Date.now();
 
-    const existing = await GameWallets.findOne({
+    if (depositThrottle.has(throttleKey)) {
+      const lastCall = depositThrottle.get(throttleKey);
+      if (now - lastCall < 5000) {
+        return res.status(429).json({ status: "error", message: "Please wait 5 seconds before checking again." });
+      }
+    }
+    depositThrottle.set(throttleKey, now);
+
+    const record = await GameWallets.findOne({
       game_name,
+      network: network.toUpperCase(),
+      token_address,
       type: "PrizePools"
     });
 
-    if (!existing) {
-      return res.status(404).json({ status: "error", message: "Tournament wallet not found. Please initialize one first." });
+    if (!record) {
+      return res.status(404).json({ status: "error", message: "Tournament wallet not found." });
     }
+
+    const provider = systemConfig.providers[record.network];
+    if (!provider) {
+      return res.status(400).json({ status: "error", message: "Provider not configured." });
+    }
+
+    const tokenContract = new ethers.Contract(token_address, [
+      "function balanceOf(address owner) view returns (uint256)"
+    ], provider);
+
+    const rawBalance = await tokenContract.balanceOf(record.wallet);
+    const balance = parseFloat(ethers.utils.formatEther(rawBalance));
+
+    if (balance > record.token_balance) {
+      const depositAmount = balance - record.token_balance;
+      const current = record.hgtpBalances.get(token_address) || 0;
+      record.hgtpBalances.set(token_address, current + depositAmount);
+    }
+
+    record.token_balance = balance;
+    await record.save();
+
+    await HyprmtrxTrx.create({
+      user: req.user.username,
+      type: "tournament_wallet_check",
+      ip: req.headers["x-forwarded-for"] || req.connection.remoteAddress,
+      timestamp: new Date(),
+      data: {
+        wallet: record.wallet,
+        network: record.network,
+        token_address,
+        token_balance: balance,
+        hgtp_balance: record.hgtpBalances.get(token_address)
+      }
+    });
 
     return res.json({
       status: "success",
-      wallet: existing.address,
-      qrcode: existing.qrcode
+      message: "Tournament deposit confirmed.",
+      token_balance: record.hgtpBalances.get(token_address) || 0
     });
   } catch (err) {
-    console.error("[POST /challenges/wallet]", err);
-    return res.status(500).json({ status: "error", message: "Failed to fetch tournament wallet" });
+    console.error("[POST /tournament/depositConfirm]", err);
+    return res.status(500).json({ status: "error", message: "Deposit check failed." });
   }
 });
 

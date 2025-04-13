@@ -21,20 +21,20 @@ export default class CloseTournament {
         payout_structure, results, max_participants, expires_at
       } = tournament;
 
-      // Determine closure type
+      // Validate condition for auto close
       if (trigger === "auto_submission") {
         if (!max_participants || results.length < max_participants) {
           throw new Error("Not all participants submitted results");
         }
       }
 
-      // 1. Evaluate winners
+      // Step 1: Evaluate winners
       const winners = WinnerEvaluator.evaluate({ results, winner_logic });
 
-      // 2. Allocate payouts
+      // Step 2: Allocate payouts
       const payouts = PayoutAllocator.allocate({ winners, reward, payout_structure });
 
-      // 3. Archive into Closed collection
+      // Step 3: Archive tournament
       const closedDoc = await ArchiveTournament.save({
         game_id,
         challenge_id,
@@ -49,13 +49,14 @@ export default class CloseTournament {
         participants,
         max_participants,
         winner_logic,
-        expires_at
+        expires_at,
+        closed_at: new Date()
       });
 
-      // 4. Delete Open tournament
+      // Step 4: Remove from open
       await GameChallengeOpen.deleteOne({ challenge_id });
 
-      // 5. Log in transaction log
+      // Step 5: Log tournament closure
       await HyprmtrxTrx.create({
         user: "system",
         type: "tournament_closed",
@@ -69,11 +70,15 @@ export default class CloseTournament {
         }
       });
 
-      return { status: "success", challenge_id };
+      return {
+        status: "success",
+        challenge_id,
+        winners,
+        payouts
+      };
     } catch (err) {
       console.error("[CloseTournament]", err.message);
       return { status: "error", message: err.message };
     }
   }
 }
-

@@ -1,88 +1,113 @@
 // File: /api/tournament/tournamentWallet.js
 
 import express from "express";
-import path from "path";
-import fs from "fs";
-import QRCode from "qrcode";
-import crypto from "crypto";
-import { ethers } from "ethers";
 import authMiddleware from "../../middleware/authMiddleware.js";
 import GameWallets from "../../Schema/gameWalletsSchema.js";
 import GamePrivateKeys from "../../Schema/GamePrivateKeys.js";
 import WalletInitializer from "../../HVM/WalletInitializer.js";
+import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
+import QRCode from "qrcode";
+import fs from "fs";
+import path from "path";
+import { ethers } from "ethers";
+import crypto from "crypto";
 
 const router = express.Router();
 
 function generatePrivateKey(network) {
-  return network === "DAG"
-    ? crypto.randomBytes(32).toString("hex")
-    : ethers.Wallet.createRandom().privateKey;
+  if (network === "DAG") {
+    return crypto.randomBytes(32).toString("hex");
+  }
+  return ethers.Wallet.createRandom().privateKey;
 }
 
-function normalizeNetworkKey(net) {
-  return net.toUpperCase();
-}
-
-router.post("/generate-tournament-wallet", authMiddleware, async (req, res) => {
+router.post("/wallet", authMiddleware, async (req, res) => {
   try {
-    const { game_name, network } = req.body;
-    if (!game_name || !network) {
-      return res.status(400).json({ status: "error", message: "Missing game_name or network." });
+    const { game_name, network, token_address } = req.body;
+    const userId = req.user.id;
+
+    if (!game_name || !network || !token_address) {
+      return res.status(400).json({ status: "error", message: "Missing required fields" });
     }
 
-    const netKey = normalizeNetworkKey(network);
-    const existing = await GameWallets.findOne({ game_name, network: netKey, type: "PrizePools" });
+    const existing = await GameWallets.findOne({
+      game_name,
+      network,
+      token_address,
+      type: "PrizePools"
+    });
 
     if (existing) {
       return res.json({
         status: "success",
         wallet: existing.wallet,
-        qrcode: `/QR_Codes/${game_name}_Tournament_Wallet.png`
+        qrcode: existing.qrcode,
+        token_balance: existing.hgtpBalances.get(token_address) || 0
       });
     }
 
-    let keyRecord = await GamePrivateKeys.findOne({ game_name });
     let privateKey;
+    let existingKeys = await GamePrivateKeys.findOne({ game_name });
 
-    if (!keyRecord) {
-      privateKey = generatePrivateKey(netKey);
-      keyRecord = await GamePrivateKeys.create({ game_name, wallets: [] });
-      await keyRecord.addWallet("prize_pool", netKey, null, privateKey); // address added later
-    } else {
-      const found = keyRecord.wallets.find(w => w.label === "prize_pool" && w.network === netKey);
-      if (found) privateKey = keyRecord.getDecryptedKey(found.address);
-      else {
-        privateKey = generatePrivateKey(netKey);
-        await keyRecord.addWallet("prize_pool", netKey, null, privateKey);
+    if (existingKeys) {
+      const match = existingKeys.wallets.find(w => w.network === network && w.label === "prize_pool");
+      if (match) privateKey = existingKeys.getDecryptedKey(match.address);
+    }
+
+    if (!privateKey) {
+      privateKey = generatePrivateKey(network);
+      if (!existingKeys) {
+        existingKeys = await GamePrivateKeys.create({ game_name, wallets: [] });
       }
+      const initializer = new WalletInitializer(game_name);
+      await initializer.initializeWallets([{ network, private_key: privateKey }]);
+      const address = initializer.getInitializedWallets()[network].address;
+      await existingKeys.addWallet("prize_pool", network, address, privateKey);
     }
 
     const initializer = new WalletInitializer(game_name);
-    await initializer.initializeWallets([{ network: netKey, private_key: privateKey }]);
+    await initializer.initializeWallets([{ network, private_key }]);
+    const address = initializer.getInitializedWallets()[network].address;
 
-    const walletAddress = initializer.getInitializedWallets()?.[netKey]?.address;
-    if (!walletAddress) throw new Error("Wallet initialization failed.");
+    const qrPath = path.join("QR_Codes", `${game_name}_Tournament_Wallet.png`);
+    await QRCode.toFile(qrPath, address);
 
-    const qrPath = path.resolve("QR_Codes", `${game_name}_Tournament_Wallet.png`);
-    await QRCode.toFile(qrPath, walletAddress);
-
-    await GameWallets.create({
+    const newWallet = await GameWallets.create({
+      user: userId,
       game_name,
-      network: netKey,
-      address: walletAddress,
+      network,
       type: "PrizePools",
-      token_address: "",
-      qrcode: `/QR_Codes/${game_name}_Tournament_Wallet.png`
+      address,
+      wallet: address,
+      token_address,
+      qrcode: qrPath,
+      eth_balance: 0,
+      token_balance: 0
+    });
+
+    await HyprmtrxTrx.create({
+      user: req.user.username,
+      type: "tournament_wallet_created",
+      ip: req.headers["x-forwarded-for"] || req.connection.remoteAddress,
+      timestamp: new Date(),
+      data: {
+        game_name,
+        network,
+        wallet: address,
+        token_address
+      }
     });
 
     return res.json({
       status: "success",
-      wallet: walletAddress,
-      qrcode: `/QR_Codes/${game_name}_Tournament_Wallet.png`
+      wallet: address,
+      qrcode: qrPath,
+      token_balance: 0
     });
+
   } catch (err) {
-    console.error("[POST /generate-tournament-wallet]", err);
-    return res.status(500).json({ status: "error", message: "Internal error creating tournament wallet." });
+    console.error("[POST /tournament/wallet]", err);
+    return res.status(500).json({ status: "error", message: "Internal server error" });
   }
 });
 

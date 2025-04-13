@@ -5,7 +5,7 @@ import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
 import GameWallets from "../../Schema/gameWalletsSchema.js";
-import Game from "../../Schema/Game.js"; // Used for ownership check
+import Game from "../../Schema/Game.js";
 import { ethers } from "ethers";
 import SystemConfig from "../../systemConfig.js";
 
@@ -28,7 +28,8 @@ router.post("/create", authMiddleware, async (req, res) => {
       reward,
       winner_logic,
       auto_restart,
-      expires_at
+      expires_at,
+      end_when_all_submitted
     } = req.body;
 
     if (
@@ -77,6 +78,7 @@ router.post("/create", authMiddleware, async (req, res) => {
       reward,
       winner_logic,
       auto_restart,
+      end_when_all_submitted: !!end_when_all_submitted,
       expires_at: new Date(expires_at)
     });
 
@@ -95,7 +97,8 @@ router.post("/create", authMiddleware, async (req, res) => {
         max_participants,
         unlimited_participants,
         winner_logic,
-        auto_restart
+        auto_restart,
+        end_when_all_submitted
       }
     });
 

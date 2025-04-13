@@ -4,37 +4,37 @@ import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import CloseTournament from "./closeTournament.js";
 
 export default class TimedClosure {
-  static async checkAndClose() {
+  static async checkAndClose(limit = 50) {
     try {
       const now = new Date();
 
-      const expired = await GameChallengeOpen.find({
+      const expiredTournaments = await GameChallengeOpen.find({
         expires_at: { $lte: now }
-      });
+      }).limit(limit);
 
-      if (!expired.length) {
-        return { status: "idle", message: "No expired tournaments" };
+      if (!expiredTournaments.length) {
+        console.log(`[TimedClosure] ✅ No tournaments to close at ${now.toISOString()}`);
+        return;
       }
 
-      const results = [];
+      console.log(`[TimedClosure] 🔎 Found ${expiredTournaments.length} tournaments to close`);
 
-      for (const t of expired) {
-        const res = await CloseTournament.execute({
-          challenge_id: t.challenge_id,
-          trigger: "timed"
-        });
-        results.push(res);
+      for (const tournament of expiredTournaments) {
+        try {
+          const { challenge_id } = tournament;
+          const result = await CloseTournament.execute({
+            challenge_id,
+            trigger: "timed"
+          });
+
+          console.log(`[TimedClosure] ✅ Closed ${challenge_id}: ${result.status}`);
+        } catch (err) {
+          console.warn(`[TimedClosure] ⚠️ Failed to close ${tournament.challenge_id}: ${err.message}`);
+        }
       }
 
-      return {
-        status: "completed",
-        closed: results.length,
-        results
-      };
     } catch (err) {
-      console.error("[TimedClosure]", err.message);
-      return { status: "error", message: err.message };
+      console.error("[TimedClosure] ❌ Global failure:", err.message);
     }
   }
 }
-

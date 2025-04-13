@@ -1,3 +1,5 @@
+// File: /api/challenges/index.js
+
 import express from "express";
 import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
@@ -23,6 +25,7 @@ router.post("/create", authMiddleware, async (req, res) => {
       expires_at
     } = req.body;
 
+    // Basic validation
     if (
       !game_id ||
       !challenge_id ||
@@ -35,19 +38,30 @@ router.post("/create", authMiddleware, async (req, res) => {
       return res.status(400).json({ status: "error", message: "Missing required fields." });
     }
 
+    // Winner logic validation
     if (winner_logic) {
       const validModes = ["highest", "lowest"];
       if (!validModes.includes(winner_logic.mode)) {
-        return res.status(400).json({ status: "error", message: "Invalid winner_logic.mode: must be 'highest' or 'lowest'" });
+        return res.status(400).json({
+          status: "error",
+          message: "Invalid winner_logic.mode: must be 'highest' or 'lowest'"
+        });
       }
       if (typeof winner_logic.metric !== "string" || !winner_logic.metric.trim()) {
-        return res.status(400).json({ status: "error", message: "winner_logic.metric must be a non-empty string" });
+        return res.status(400).json({
+          status: "error",
+          message: "winner_logic.metric must be a non-empty string"
+        });
       }
       if (winner_logic.formula && typeof winner_logic.formula !== "string") {
-        return res.status(400).json({ status: "error", message: "winner_logic.formula must be a string" });
+        return res.status(400).json({
+          status: "error",
+          message: "winner_logic.formula must be a string"
+        });
       }
     }
 
+    // Ensure unique challenge ID
     const exists = await GameChallengeOpen.findOne({ challenge_id });
     if (exists) {
       return res.status(409).json({ status: "error", message: "Challenge ID already exists." });

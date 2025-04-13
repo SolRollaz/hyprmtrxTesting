@@ -5,7 +5,7 @@ import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
 import GameWallets from "../../Schema/gameWalletsSchema.js";
-import Game from "../../Schema/Game.js";
+import GameInfo from "../../Schema/gameDataSchema.js"; // ✅ Correct schema
 import { ethers } from "ethers";
 import SystemConfig from "../../systemConfig.js";
 
@@ -29,7 +29,8 @@ router.post("/create", authMiddleware, async (req, res) => {
       winner_logic,
       auto_restart,
       expires_at,
-      end_when_all_submitted
+      end_when_all_submitted,
+      gameKey
     } = req.body;
 
     if (
@@ -42,10 +43,10 @@ router.post("/create", authMiddleware, async (req, res) => {
     if (winner_logic) {
       const validModes = ["highest", "lowest"];
       if (!validModes.includes(winner_logic.mode)) {
-        return res.status(400).json({ status: "error", message: "Invalid winner_logic.mode: must be 'highest' or 'lowest'" });
+        return res.status(400).json({ status: "error", message: "Invalid winner_logic.mode" });
       }
       if (typeof winner_logic.metric !== "string" || !winner_logic.metric.trim()) {
-        return res.status(400).json({ status: "error", message: "winner_logic.metric must be a non-empty string" });
+        return res.status(400).json({ status: "error", message: "Invalid winner_logic.metric" });
       }
       if (winner_logic.formula && typeof winner_logic.formula !== "string") {
         return res.status(400).json({ status: "error", message: "winner_logic.formula must be a string" });
@@ -57,9 +58,9 @@ router.post("/create", authMiddleware, async (req, res) => {
       return res.status(409).json({ status: "error", message: "Challenge ID already exists." });
     }
 
-    const game = await Game.findOne({ game_name: game_id });
-    const isOwner = game?.created_by === req.user.username;
-    const hasKey = req.body.gameKey && req.body.gameKey === game?.game_key;
+    const game = await GameInfo.findOne({ game_name: game_id });
+    const isOwner = game?.registered_by === req.user.username;
+    const hasKey = gameKey && gameKey === game?.game_key;
 
     if (!isOwner && !hasKey) {
       return res.status(403).json({ status: "error", message: "Unauthorized to create tournaments for this game." });
@@ -111,7 +112,7 @@ router.post("/create", authMiddleware, async (req, res) => {
           expires_at: new Date(expires_at)
         });
       }
-    } catch (err) {
+    } catch {
       console.warn("⚠️ closeTournament.js not yet implemented or failed to load.");
     }
 

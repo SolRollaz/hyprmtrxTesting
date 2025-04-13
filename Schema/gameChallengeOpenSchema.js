@@ -5,6 +5,10 @@ const resultEntrySchema = new mongoose.Schema({
   data: {
     type: mongoose.Schema.Types.Mixed,
     default: {}
+  },
+  final: {
+    type: Boolean,
+    default: false
   }
 }, { _id: false });
 
@@ -47,6 +51,8 @@ const gameChallengeOpenSchema = new mongoose.Schema({
   },
 
   auto_restart: { type: Boolean, default: false },
+  close_on_submit: { type: Boolean, default: false },
+
   expires_at: { type: Date, required: true },
   created_at: { type: Date, default: Date.now }
 });

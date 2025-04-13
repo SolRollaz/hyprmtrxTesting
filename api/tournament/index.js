@@ -78,8 +78,8 @@ router.post("/create", authMiddleware, async (req, res) => {
       reward,
       winner_logic,
       auto_restart,
-      end_when_all_submitted: !!end_when_all_submitted,
-      expires_at: new Date(expires_at)
+      expires_at: new Date(expires_at),
+      end_when_all_submitted: !!end_when_all_submitted
     });
 
     await newChallenge.save();
@@ -101,6 +101,19 @@ router.post("/create", authMiddleware, async (req, res) => {
         end_when_all_submitted
       }
     });
+
+    try {
+      const closeHook = await import("../tournament/closeTournament.js");
+      if (typeof closeHook.default === "function") {
+        closeHook.default({
+          challenge_id,
+          end_when_all_submitted: !!end_when_all_submitted,
+          expires_at: new Date(expires_at)
+        });
+      }
+    } catch (err) {
+      console.warn("⚠️ closeTournament.js not yet implemented or failed to load.");
+    }
 
     return res.json({ status: "success", challenge_id });
   } catch (err) {

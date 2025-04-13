@@ -2,35 +2,40 @@
 
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import CloseTournament from "./closeTournament.js";
+import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
+import TournamentLogger from "./TournamentLogger.js";
 
 export default class AutoCloseOnSubmissions {
-  static async check(challenge_id) {
+  static async close(tournament) {
     try {
-      if (!challenge_id) throw new Error("Missing challenge_id");
+      if (!tournament || !tournament.challenge_id) return false;
+      if (!tournament.end_when_all_submitted) return false;
 
-      const tournament = await GameChallengeOpen.findOne({ challenge_id });
-      if (!tournament) return { status: "error", message: "Tournament not found" };
+      const submitted = tournament.results.length;
+      const expected = tournament.max_participants;
 
-      if (!tournament.end_when_all_submitted) {
-        return { status: "skipped", reason: "Not configured for auto close on submissions." };
+      if (!expected || submitted < expected) {
+        TournamentLogger.info(`AutoClose: Waiting for submissions (${submitted}/${expected})`);
+        return false;
       }
 
-      const { max_participants, results } = tournament;
-
-      if (!max_participants || results.length < max_participants) {
-        return { status: "waiting", submitted: results.length, required: max_participants };
-      }
-
-      const closeResult = await CloseTournament.execute({
-        challenge_id,
+      const result = await CloseTournament.execute({
+        challenge_id: tournament.challenge_id,
         trigger: "auto_submission"
       });
 
-      return closeResult;
+      await HyprmtrxTrx.create({
+        user: "system",
+        type: "auto_submission_close",
+        ip: "inline_check",
+        timestamp: new Date(),
+        data: { challenge_id: tournament.challenge_id }
+      });
+
+      return result;
     } catch (err) {
-      console.error("[AutoCloseOnSubmissions]", err.message);
+      TournamentLogger.error(`[AutoCloseOnSubmissions] ${err.message}`);
       return { status: "error", message: err.message };
     }
   }
 }
-

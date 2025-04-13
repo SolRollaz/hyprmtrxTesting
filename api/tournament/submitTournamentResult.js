@@ -1,9 +1,12 @@
+// api/tournament/submitTournamentResult.js
+
 import express from "express";
 import authMiddleware from "../../middleware/authMiddleware.js";
 import GameChallengeOpen from "../../Schema/GameChallengeOpen.js";
 import Game from "../../Schema/Game.js";
 import validateResult from "./utils/validateResult.js";
 import HyprmtrxTrx from "../../Schema/hyprmtrxTrxSchema.js";
+import { shouldCloseTournament } from "./checkClose.js";
 
 const router = express.Router();
 
@@ -57,6 +60,9 @@ router.post("/submit-result", authMiddleware, async (req, res) => {
 
     // Save updated tournament
     await challenge.save();
+
+    // Check if the tournament should be closed
+    await shouldCloseTournament(challenge_id);
 
     // Log the event
     await HyprmtrxTrx.create({
